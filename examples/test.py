@@ -23,15 +23,25 @@ def press_key_stop():
 def test_assign_image():
     image = images[0]
     shape = image.shape
-    concat_image = np.zeros((shape[0] * 2, shape[1], 3))
+    concat_image = np.zeros((shape[0] * 2, shape[1]*2, 3))
     result = tl.assign_image(image, concat_image, [0, 0])
-    result = tl.assign_image(image, result, (shape[0], 0))
-    return result.eval()
+    result = tl.assign_image(image, result, (shape[0], shape[1]))
+    r = result.eval()
+    return r
+
+
+def test_pyramid():
+    image = images[0]
+    result = tl.pyramid(image, 6)
+    r = result.eval()
+    r = r.astype(np.uint8)
+    return r
+
 
 
 with tf.Session():
-    r = test_assign_image()
-    #r = r.astype(np.uint8)
+    #r = test_assign_image()
+    r = test_pyramid()
 
     cv2.imshow("scale", r)
     cv2.imwrite("test.png", r)

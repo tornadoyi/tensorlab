@@ -4,7 +4,9 @@
 #include "tensorflow/core/kernels/resize_bilinear_op.h"
 #include "tensorflow/core/kernels/image_resizer_state.h"
 #include "image_tool.h"
+#include "assign_image_op.h"
 #include "pyramid_op.h"
+
 
 using namespace tensorflow;
 typedef Eigen::ThreadPoolDevice CPUDevice;
@@ -120,7 +122,6 @@ public:
     explicit PyramidOp(OpKernelConstruction* context) : OpKernel(context)
     {
         OP_REQUIRES_OK(context, context->GetAttr("align_corners", &align_corners_));
-        OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
         OP_REQUIRES_OK(context, context->GetAttr("min_size", &min_size_));
         OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
 
@@ -137,29 +138,45 @@ public:
     void Compute(OpKernelContext* context) override
     {
         const Tensor& input_tensor = context->input(0);
+        const Tensor& scale_tensor = context->input(1);
+
+        OP_REQUIRES(context, input_tensor.dims() == 3,
+                    errors::InvalidArgument("image must be 3-dimensional",
+                                            input_tensor.shape().DebugString()));
+
+        auto scale_ = scale_tensor.flat<int32>()(0);
+
 
         Tensor input_tensor_4d;
         CHECK(input_tensor_4d.CopyFrom(input_tensor, TensorShape({1, _nr(input_tensor), _nc(input_tensor), _nd(input_tensor)})));
 
         std::vector<Tensor> pyramid;
-        pyramid.push_back(std::move(input_tensor_4d));
-        while(true)
+        do
         {
-            auto& input = pyramid[pyramid.size()-1];
-            auto w = (int64)((scale_- 1) * input.dim_size(1) / scale_ + 0.5);
-            auto h = (int64)((scale_- 1) * input.dim_size(2) / scale_ + 0.5);
+            if(pyramid.size() == 0)
+            {
+                Tensor output;
+                ResizeImage<T>(context, input_tensor_4d, TensorShape({_nr(input_tensor), _nc(input_tensor)}), output);
+                pyramid.push_back(std::move(output));
+                continue;
+            }
 
-            if(w < min_size_ || h < min_size_) break;
+            auto& input = pyramid[pyramid.size()-1];
+            auto r = (int64)((scale_- 1) * _nr(input) / scale_ + 0.5);
+            auto c = (int64)((scale_- 1) * _nc(input) / scale_ + 0.5);
+
+            if(r < min_size_ || c < min_size_) break;
 
             Tensor output;
-            ResizeImage(context, input, TensorShape({h, w}), output);
+            ResizeImage<float>(context, input, TensorShape({r, c}), output);
             pyramid.push_back(std::move(output));
-        }
+
+        }while (true);
 
 
         int64 total_height = 0;
         for (auto&& t : pyramid)
-            total_height += t.dim_size(2) + padding_;
+            total_height += _nr(t) + padding_;
 
         total_height -= padding_ * 2; // don't add unnecessary padding to the very right side.
         int64 height = 0;
@@ -169,7 +186,7 @@ public:
             // Figure out how far we go on the first column.  We go until the next image can
             // fit next to the previous one, which means we can double back for the second
             // column of images.
-            if (t.dim_size(1) <= _nc(input_tensor)-prev_width-(int64)padding_ &&
+            if (_nc(t) <= _nc(input_tensor)-prev_width-(int64)padding_ &&
                 (height-_nr(input_tensor))*2 >= (total_height-_nr(input_tensor)))
             {
                 break;
@@ -181,7 +198,7 @@ public:
 
         Tensor* ouput_tensor;
         OP_REQUIRES_OK(context, context->allocate_output(
-                0, TensorShape({height, _nc(input_tensor)}),
+                0, TensorShape({height, _nc(input_tensor), _nd(input_tensor)}),
                 &ouput_tensor));
 
 
@@ -190,54 +207,58 @@ public:
         typename TTypes<float, 3>::Tensor dst = ouput_tensor->tensor<float, 3>();
         while(y < height)
         {
-            //rectangle rect = translate_rect(get_rect(pyramid[i]),point(0,y));
-            //DLIB_ASSERT(get_rect(out_img).contains(rect));
-            //rects.push_back(rect);
-            //auto si = sub_image(out_img, rect);
-            //assign_image(si, pyramid[i]);
             const Tensor& input = pyramid[i];
-            typename TTypes<T, 3>::ConstTensor src = input.tensor<T, 3>();
-            //kernel::AssignImage<Device, T, float> m;
-            //m(context->eigen_device<Device>(), src, dst, 0, (int)y);
-            //y += _nr(input) + padding_;
-            //++i;
+            Tensor input_3d;
+            CHECK(input_3d.CopyFrom(input, TensorShape({_nr(input), _nc(input), _nd(input)})));
+            typename TTypes<float, 3>::ConstTensor src = ((const Tensor)(input_3d)).tensor<float, 3>();
+            kernel::AssignImage<Device, float>()(context->eigen_device<Device>(), src, dst, (int)y, 0);
+
+            y += _nr(input) + padding_;
+            ++i;
         }
 
+        y -= padding_;
+        while (i < pyramid.size())
+        {
+            auto input = pyramid[i];
+            auto br_x = _nc(dst) - 1;
+            auto br_y = y - 1;
+            auto tl_x = br_x - _nc(input);
+            auto tl_y = br_y - _nr(input);
 
+            Tensor input_3d;
+            CHECK(input_3d.CopyFrom(input, TensorShape({_nr(input), _nc(input), _nd(input)})));
+            typename TTypes<float, 3>::ConstTensor src = ((const Tensor)(input_3d)).tensor<float, 3>();
+            kernel::AssignImage<Device, float>()(context->eigen_device<Device>(), src, dst, tl_y, tl_x);
 
-        //CHECK(ouput_tensor->CopyFrom(t, t.shape()));
-
+            y -= _nr(input) + padding_;
+            ++i;
+        }
 
     }
 
+    template <typename T_IMAGE>
     void ResizeImage(OpKernelContext* context, const Tensor& input, const TensorShape& resize_shape, Tensor& output)
     {
         PyramidImageResizerState st(align_corners_);
-        st.ValidateAndCreateOutput<T>(context, input, resize_shape, output);
+        st.ValidateAndCreateOutput<T_IMAGE>(context, input, resize_shape, output);
 
         if (!context->status().ok()) return;
 
         // Return if the output is empty.
         if (output.NumElements() == 0) return;
 
-        typename TTypes<T, 4>::ConstTensor image_data = input.tensor<T, 4>();
+        typename TTypes<T_IMAGE, 4>::ConstTensor image_data = input.tensor<T_IMAGE, 4>();
         typename TTypes<float, 4>::Tensor output_data = output.tensor<float, 4>();
 
-        functor::ResizeBilinear<Device, T>()(context->eigen_device<Device>(),
+        functor::ResizeBilinear<Device, T_IMAGE>()(context->eigen_device<Device>(),
                                              image_data, st.height_scale,
                                              st.width_scale, output_data);
     }
 
 
-    void PyramidImages(OpKernelContext* context, const std::vector<Tensor>& images, int left_image_count,  Tensor& output)
-    {
-
-    }
-
-
     bool align_corners_;
     E_RESIZE_METHOD method_;
-    int scale_;
     int padding_;
     float min_size_;
 };
@@ -272,7 +293,7 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
 REGISTER_OP("Pyramid")
         .Input("images: T")
         .Input("scale: int32")
-        .Output("resized_images: float")
+        .Output("pyramid_image: float")
         .Attr("T: {uint8, int8, int16, int32, int64, half, float, double}")
         .Attr("min_size: float = 5.0")
         .Attr("padding: int = 10")
