@@ -28,7 +28,11 @@ def test_assign_image():
     result = tl.assign_image(image, out_image, [0, 0])
     result = tl.assign_image(image, result, (shape[1], shape[2]))
     r = result.eval()
-    return r
+
+    for i in xrange(r.shape[0]):
+        print("{0} image".format(i))
+        cv2.imshow("scale", r[i])
+        press_key_stop()
 
 
 def test_pyramid():
@@ -37,16 +41,27 @@ def test_pyramid():
     result = tl.pyramid(image, 6)
     r = result.eval()
     r = r.astype(np.uint8)
-    return r
-
-
-
-with tf.Session():
-    #r = test_assign_image()
-    r = test_pyramid()
 
     for i in xrange(r.shape[0]):
         print("{0} image".format(i))
         cv2.imshow("scale", r[i])
         press_key_stop()
+
+
+def test_flat_color():
+    image = images[0]
+    image = np.array([image, image, image, image, image])
+    result = tl.flat_color(image)
+    r = result.eval()
+    r = r.astype(np.uint8)
+
+    for i in xrange(r.shape[0]):
+        print("{0} image".format(i))
+        cv2.imshow("scale", r[i])
+        press_key_stop()
+
+
+with tf.Session():
+    test_flat_color()
+
 

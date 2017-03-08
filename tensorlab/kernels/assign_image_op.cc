@@ -102,11 +102,8 @@ namespace kernel
                     auto p_dst = st_dst;
                     for (int64 j = 0; j < _nc(src); ++j)
                     {
-                        //auto p_src = (i * _nc(src) + j) * channel;
-                        //auto p_dst = ((i+startx) * _nc(dst) + (j+starty)) * channel;
-                        ptr_dst[p_dst + 0] = ptr_src[p_src + 0];
-                        ptr_dst[p_dst + 1] = ptr_src[p_src + 1];
-                        ptr_dst[p_dst + 2] = ptr_src[p_src + 2];
+                        for(int64 k=0; k<channel; ++k)
+                            ptr_dst[p_dst + k] = ptr_src[p_src + k];
 
                         p_src += channel;
                         p_dst += channel;
