@@ -25,8 +25,8 @@ def test_assign_image():
     image = np.array([image, image, image, image, image])
     shape = image.shape
     out_image = np.zeros((shape[0], shape[1]*2,  shape[2]*2, shape[3]))
-    result = tl.assign_image(image, out_image, [0, 0])
-    result = tl.assign_image(image, result, (shape[1], shape[2]))
+    result = tl.image.assign_image(image, out_image, [0, 0])
+    result = tl.image.assign_image(image, result, (shape[1], shape[2]))
     r = result.eval()
 
     for i in xrange(r.shape[0]):
@@ -38,7 +38,7 @@ def test_assign_image():
 def test_pyramid():
     image = images[0]
     image = np.array([image, image, image, image, image])
-    result = tl.pyramid(image, 6)
+    result = tl.image.pyramid(image, 6)
     r = result.eval()
     r = r.astype(np.uint8)
 
@@ -51,7 +51,7 @@ def test_pyramid():
 def test_flat_color():
     image = images[0]
     image = np.array([image, image, image, image, image])
-    result = tl.flat_color(image)
+    result = tl.image.flat_color(image)
     r = result.eval()
     r = r.astype(np.uint8)
 

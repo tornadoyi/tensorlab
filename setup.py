@@ -21,23 +21,7 @@ from setuptools import setup, find_packages, Command
 # Define version information
 VERSION = '0.1'
 FULLVERSION = VERSION
-ROOT_PATH = os.path.dirname(os.path.realpath(sys.argv[0]))
-BUILD_PATH = os.getcwd()
-PYTHON_SRC_PATH = os.path.join(ROOT_PATH, "python")
-LIB_SRC_PATH = os.path.join(BUILD_PATH, "tensorlab", "libtensorlab.so")
-LIB_DST_PATH = os.path.join(PYTHON_SRC_PATH, "libtensorlab.so")
 
-# clear build path
-os.system("rm -rf *")
-
-# build tensorlab
-os.system('cmake ..')
-os.system('make')
-
-# copy lib
-if not os.path.isfile(LIB_SRC_PATH):
-    exit()
-shutil.copy(LIB_SRC_PATH, LIB_DST_PATH)
 
 # build python
 
@@ -48,8 +32,8 @@ setup(name='tensorlab',
     author='yi gu',
     author_email='390512308@qq.com',
     license='License :: OSI Approved :: Apache Software License',
-    packages=['tensorlab'],
-    package_dir={'tensorlab': PYTHON_SRC_PATH},
+    packages=find_packages(),
+    #package_dir={'': 'tensorlab'},
     package_data={'tensorlab': ['*.so']},
     zip_safe=False,
     classifiers=['Development Status :: 3 - Alpha',
@@ -69,6 +53,3 @@ setup(name='tensorlab',
                'Topic :: Scientific/Engineering :: Information Analysis',
                'Topic :: System :: Distributed Computing'])
 
-
-# delete lib
-os.remove(LIB_DST_PATH)
