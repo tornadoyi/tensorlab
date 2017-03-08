@@ -12,41 +12,29 @@ using namespace tensorflow;
 
 #define DECLARE_IMAGE_TENSOR_DATA(name, data_revert_index) \
     inline int64 image_tensor_##name(const Tensor& tensor){ \
-        auto dim = tensor.dims(); \
-        switch(dim) { \
-            case 3: \
-            case 4: \
-                return tensor.dim_size(dim-data_revert_index); \
-            default: \
-                LOG(FATAL) << "Invalid image tensor dims " << dim; \
-        } \
-        return -1; \
+        auto dims = tensor.dims(); \
+        auto index = dims - data_revert_index; \
+        CHECK(dims >= 3); \
+        CHECK(index >= 0); \
+        return tensor.dim_size(index); \
     }
 
 #define DECLARE_IMAGE_TTYPES_TENSOR_DATA(name, T, NDIMS,  data_revert_index) \
     inline int64 image_tensor_##name(TTypes<T, NDIMS>::Tensor tensor) { \
-        auto dim = NDIMS; \
-        switch(dim) { \
-            case 3: \
-            case 4: \
-                return tensor.dimension(dim-data_revert_index); \
-            default: \
-                LOG(FATAL) << "Invalid image tensor dims " << dim; \
-        } \
-        return -1; \
+        auto dims = NDIMS; \
+        auto index = dims - data_revert_index; \
+        CHECK(dims >= 3); \
+        CHECK(index >= 0); \
+        return tensor.dimension(index); \
     }
 
 #define DECLARE_IMAGE_TTYPES_CONST_TENSOR_DATA(name, T, NDIMS,  data_revert_index) \
     inline int64 image_tensor_##name(TTypes<T, NDIMS>::ConstTensor tensor) { \
-        auto dim = NDIMS; \
-        switch(dim) { \
-            case 3: \
-            case 4: \
-                return tensor.dimension(dim-data_revert_index); \
-            default: \
-                LOG(FATAL) << "Invalid image tensor dims " << dim; \
-        } \
-        return -1; \
+        auto dims = NDIMS; \
+        auto index = dims - data_revert_index; \
+        CHECK(dims >= 3); \
+        CHECK(index >= 0); \
+        return tensor.dimension(index); \
     }
 
 
@@ -69,20 +57,25 @@ using namespace tensorflow;
 
 
 
+DECLARE_IMAGE_TENSOR_DATA(nbatch, 4)
 DECLARE_IMAGE_TENSOR_DATA(nrow, 3)
 DECLARE_IMAGE_TENSOR_DATA(ncol, 2)
 DECLARE_IMAGE_TENSOR_DATA(ndata, 1)
 
+
+DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(nbatch, 3, 4)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(nrow, 3, 3)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(ncol, 3, 2)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(ndata, 3, 1)
 
+
+DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(nbatch, 4, 4)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(nrow, 4, 3)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(ncol, 4, 2)
 DECLARE_IMAGE_TTYPES_TENSOR_DATA_ALL_TYPES(ndata, 4, 1)
 
 
-#define _nb(t) t.dim_size(0)
+#define _nb(t) image_tensor_nbatch(t)
 #define _nr(t) image_tensor_nrow(t)
 #define _nc(t) image_tensor_ncol(t)
 #define _nd(t) image_tensor_ndata(t)

@@ -26,8 +26,12 @@ public:
         int startx = Svec(0);
         int starty = Svec(1);
 
-        OP_REQUIRES(context, src_tensor.dims() == 3 && dst_tensor.dims() == 3,
-                    errors::InvalidArgument("image must be 3-dimensional",
+        OP_REQUIRES(context, src_tensor.dims() == 3 || src_tensor.dims() == 4,
+                    errors::InvalidArgument("image must be 3-dimensional or 4-dimensional",
+                                            src_tensor.shape().DebugString(), dst_tensor.shape().DebugString()));
+
+        OP_REQUIRES(context, src_tensor.dims() == dst_tensor.dims(),
+                    errors::InvalidArgument("src and dst must be same dimensional",
                                             src_tensor.shape().DebugString(), dst_tensor.shape().DebugString()));
 
         OP_REQUIRES(context, start_loc.dims() == 1,
@@ -43,11 +47,21 @@ public:
         OP_REQUIRES_OK(context, context->allocate_output(0, dst_tensor.shape(), &output));
         CHECK(output->CopyFrom(dst_tensor, dst_tensor.shape()));
 
-        typename TTypes<T, 3>::ConstTensor src_data = src_tensor.tensor<T, 3>();
-        typename TTypes<T, 3>::Tensor output_data = output->tensor<T, 3>();
 
-
-        kernel::AssignImage<Device, T>()(context->eigen_device<Device>(), src_data, output_data, startx, starty);
+        if(src_tensor.dims() == 3)
+        {
+            kernel::AssignImage<Device, T, 3>()(context->eigen_device<Device>(),
+                                                src_tensor.tensor<T, 3>(),
+                                                startx, starty,
+                                                output->tensor<T, 3>());
+        }
+        else
+        {
+            kernel::AssignImage<Device, T, 4>()(context->eigen_device<Device>(),
+                                                src_tensor.tensor<T, 4>(),
+                                                startx, starty,
+                                                output->tensor<T, 4>());
+        }
 
     }
 };
@@ -56,54 +70,62 @@ public:
 
 namespace kernel
 {
-    template <typename T>
-    struct AssignImage<CPUDevice, T>
+    template <typename T, size_t NDIMS>
+    struct AssignImage<CPUDevice, T, NDIMS>
     {
         void operator()(const CPUDevice& d,
-                        typename TTypes<T, 3>::ConstTensor src,
-                        typename TTypes<T, 3>::Tensor dst,
-                        int startx, int starty)
+                        typename TTypes<T, NDIMS>::ConstTensor src,
+                        int startx,
+                        int starty,
+                        typename TTypes<T, NDIMS>::Tensor dst)
         {
-
-            //LOG(INFO)<< "src: "<< _nr(src) << " " << _nc(src);
-            //LOG(INFO)<< "dst: "<< _nr(dst) << " " << _nc(dst);
-            //LOG(INFO)<< startx << " " << starty;
-
+            int64 batch = NDIMS <= 3 ? 1 : _nb(src);
 
             auto channel = _nd(src);
             const T* ptr_src = src.data();
             T* ptr_dst = dst.data();
 
-            auto count_src_row = _nc(src) * channel;
-            auto count_dst_row = _nc(dst) * channel;
-            int64 st_src = 0;
-            int64 st_dst = (startx * _nc(dst) + starty) * channel;
-            for(int64 i=0; i<_nr(src); ++i)
+            auto size_src_row = _nc(src) * channel;
+            auto size_dst_row = _nc(dst) * channel;
+            auto size_src_img = size_src_row * _nr(src);
+            auto size_dst_img = size_dst_row * _nr(dst);
+
+            int64 init_src = 0;
+            int64 init_dst = (startx * _nc(dst) + starty) * channel;
+            for(int64 n=0; n<batch; ++n)
             {
-                auto p_src = st_src;
-                auto p_dst = st_dst;
-                for (int64 j = 0; j < _nc(src); ++j)
+                auto st_src = init_src;
+                auto st_dst = init_dst;
+                for(int64 i=0; i<_nr(src); ++i)
                 {
-                    //auto p_src = (i * _nc(src) + j) * channel;
-                    //auto p_dst = ((i+startx) * _nc(dst) + (j+starty)) * channel;
-                    ptr_dst[p_dst + 0] = ptr_src[p_src + 0];
-                    ptr_dst[p_dst + 1] = ptr_src[p_src + 1];
-                    ptr_dst[p_dst + 2] = ptr_src[p_src + 2];
+                    auto p_src = st_src;
+                    auto p_dst = st_dst;
+                    for (int64 j = 0; j < _nc(src); ++j)
+                    {
+                        //auto p_src = (i * _nc(src) + j) * channel;
+                        //auto p_dst = ((i+startx) * _nc(dst) + (j+starty)) * channel;
+                        ptr_dst[p_dst + 0] = ptr_src[p_src + 0];
+                        ptr_dst[p_dst + 1] = ptr_src[p_src + 1];
+                        ptr_dst[p_dst + 2] = ptr_src[p_src + 2];
 
-                    p_src += channel;
-                    p_dst += channel;
+                        p_src += channel;
+                        p_dst += channel;
+                    }
+                    st_src += size_src_row;
+                    st_dst += size_dst_row;
                 }
-                st_src += count_src_row;
-                st_dst += count_dst_row;
-            }
 
+                ptr_src += size_src_img;
+                ptr_dst += size_dst_img;
+            }
         }
 
     };
 
 
 #define DEFINE_CPU_SPECS(T)                     \
-  template struct AssignImage<CPUDevice, T>;
+    template struct AssignImage<CPUDevice, T, 3>; \
+    template struct AssignImage<CPUDevice, T, 4>;
 
     TF_CALL_REAL_NUMBER_TYPES(DEFINE_CPU_SPECS);
 

@@ -12,13 +12,15 @@
 namespace kernel
 {
 
-    template <typename Device, typename T>
+    template <typename Device, typename T, size_t NDIMS>
     struct AssignImage {
+
         void operator()(const Device& d,
-                        typename TTypes<T, 3>::ConstTensor src_data,
-                        typename TTypes<T, 3>::Tensor output_data,
+                        typename TTypes<T, NDIMS>::ConstTensor src_data,
                         int startx,
-                        int starty);
+                        int starty,
+                        typename TTypes<T, NDIMS>::Tensor output_data);
+
     };
 
 } // namespace kernel

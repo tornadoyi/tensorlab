@@ -25,21 +25,18 @@ struct PyramidImageResizerState {
     // the context, which the caller must check.
     void ValidateAndCalculateOutputSize(OpKernelContext* context,
                                         const Tensor& input, const TensorShape& resize_shape) {
+
         OP_REQUIRES(context, input.dims() == 4,
                     errors::InvalidArgument("input must be 4-dimensional",
                                             input.shape().DebugString()));
-        /*
-        const Tensor& shape_t = context->input(1);
-        OP_REQUIRES(context, shape_t.dims() == 1,
-                    errors::InvalidArgument("shape_t must be 1-dimensional",
-                                            shape_t.shape().DebugString()));
-        OP_REQUIRES(context, shape_t.NumElements() == 2,
-                    errors::InvalidArgument("shape_t must have two elements",
-                                            shape_t.shape().DebugString()));
-        */
+
+        OP_REQUIRES(context, resize_shape.dims() == 2,
+                    errors::InvalidArgument("resize_shape must be 1-dimensional",
+                                            resize_shape.DebugString()));
+
 
         //auto Svec = shape_t.vec<int32>();
-        batch_size = input.dim_size(0);
+        batch_size = _nb(input);
         //out_height = internal::SubtleMustCopy(Svec(0));
         //out_width = internal::SubtleMustCopy(Svec(1));
         out_height = resize_shape.dim_size(0);
@@ -92,11 +89,13 @@ struct PyramidImageResizerState {
                 &output));
         */
 
-        TensorShape shape({input.dim_size(0), out_height, out_width, input.dim_size(3)});
+        TensorShape shape({batch_size, out_height, out_width, channels});
 
         OP_REQUIRES_OK(context, context->allocate_temp(
                 DataTypeToEnum<float>::v(), shape,
                 &output));
+
+
     }
 
     int64 batch_size;
@@ -139,16 +138,11 @@ public:
     {
         const Tensor& input_tensor = context->input(0);
         const Tensor& scale_tensor = context->input(1);
-
-        OP_REQUIRES(context, input_tensor.dims() == 3,
-                    errors::InvalidArgument("image must be 3-dimensional",
-                                            input_tensor.shape().DebugString()));
-
         auto scale_ = scale_tensor.flat<int32>()(0);
 
-
-        Tensor input_tensor_4d;
-        CHECK(input_tensor_4d.CopyFrom(input_tensor, TensorShape({1, _nr(input_tensor), _nc(input_tensor), _nd(input_tensor)})));
+        OP_REQUIRES(context, input_tensor.dims() == 4,
+                    errors::InvalidArgument("image must be 4-dimensional",
+                                            input_tensor.shape().DebugString()));
 
         std::vector<Tensor> pyramid;
         do
@@ -156,7 +150,7 @@ public:
             if(pyramid.size() == 0)
             {
                 Tensor output;
-                ResizeImage<T>(context, input_tensor_4d, TensorShape({_nr(input_tensor), _nc(input_tensor)}), output);
+                ResizeImage<T>(context, input_tensor, TensorShape({_nr(input_tensor), _nc(input_tensor)}), output);
                 pyramid.push_back(std::move(output));
                 continue;
             }
@@ -165,6 +159,7 @@ public:
             auto r = (int64)((scale_- 1) * _nr(input) / scale_ + 0.5);
             auto c = (int64)((scale_- 1) * _nc(input) / scale_ + 0.5);
 
+
             if(r < min_size_ || c < min_size_) break;
 
             Tensor output;
@@ -172,7 +167,6 @@ public:
             pyramid.push_back(std::move(output));
 
         }while (true);
-
 
         int64 total_height = 0;
         for (auto&& t : pyramid)
@@ -198,38 +192,34 @@ public:
 
         Tensor* ouput_tensor;
         OP_REQUIRES_OK(context, context->allocate_output(
-                0, TensorShape({height, _nc(input_tensor), _nd(input_tensor)}),
+                0, TensorShape({_nb(input_tensor), height, _nc(input_tensor), _nd(input_tensor)}),
                 &ouput_tensor));
 
 
         int64 y = 0;
         size_t i = 0;
-        typename TTypes<float, 3>::Tensor dst = ouput_tensor->tensor<float, 3>();
+        typename TTypes<float, 4>::Tensor dst = ouput_tensor->tensor<float, 4>();
         while(y < height)
         {
             const Tensor& input = pyramid[i];
-            Tensor input_3d;
-            CHECK(input_3d.CopyFrom(input, TensorShape({_nr(input), _nc(input), _nd(input)})));
-            typename TTypes<float, 3>::ConstTensor src = ((const Tensor)(input_3d)).tensor<float, 3>();
-            kernel::AssignImage<Device, float>()(context->eigen_device<Device>(), src, dst, (int)y, 0);
+            typename TTypes<float, 4>::ConstTensor src = input.tensor<float, 4>();
+            kernel::AssignImage<Device, float, 4>()(context->eigen_device<Device>(), src, (int)y, 0, dst);
 
             y += _nr(input) + padding_;
             ++i;
         }
-
         y -= padding_;
+
         while (i < pyramid.size())
         {
-            auto input = pyramid[i];
+            const Tensor& input = pyramid[i];
             auto br_x = _nc(dst) - 1;
             auto br_y = y - 1;
             auto tl_x = br_x - _nc(input);
             auto tl_y = br_y - _nr(input);
 
-            Tensor input_3d;
-            CHECK(input_3d.CopyFrom(input, TensorShape({_nr(input), _nc(input), _nd(input)})));
-            typename TTypes<float, 3>::ConstTensor src = ((const Tensor)(input_3d)).tensor<float, 3>();
-            kernel::AssignImage<Device, float>()(context->eigen_device<Device>(), src, dst, tl_y, tl_x);
+            typename TTypes<float, 4>::ConstTensor src = input.tensor<float, 4>();
+            kernel::AssignImage<Device, float, 4>()(context->eigen_device<Device>(), src, tl_y, tl_x, dst);
 
             y -= _nr(input) + padding_;
             ++i;
@@ -263,17 +253,6 @@ public:
     float min_size_;
 };
 
-
-namespace kernel {
-    template <typename T>
-    struct PyramidImages<CPUDevice, T> {
-        void operator()(const CPUDevice& d, typename TTypes<T, 4>::ConstTensor images,
-                        typename TTypes<float, 4>::Tensor output)
-        {
-
-        }
-    };
-}  // namespace functor
 
 
 
