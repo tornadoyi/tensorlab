@@ -1,2 +1,4 @@
-cmake_minimum_required(VERSION 2.6)  
-add_subdirectory(tensorlab)
+cmake_minimum_required(VERSION 2.6)
+add_subdirectory(cc/tensorflow-ext)
+add_subdirectory(cc/tensorlab)
+
