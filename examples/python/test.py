@@ -7,7 +7,7 @@ import dataset
 import cv2
 from time import sleep
 
-images, labels = dataset.load_xml("data/testing.xml")
+images, labels = dataset.load_xml("../data/testing.xml")
 #image = cv2.cvtColor(images[i], cv2.COLOR_BGR2RGB)
 
 
@@ -52,6 +52,7 @@ def test_flat_color():
     image = images[0]
     image = np.array([image, image, image, image, image])
     result = tl.image.flat_color(image)
+    print(result)
     r = result.eval()
     r = r.astype(np.uint8)
 

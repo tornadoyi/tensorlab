@@ -269,16 +269,6 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
 
 
 
-REGISTER_OP("Pyramid")
-        .Input("images: T")
-        .Input("scale: int32")
-        .Output("pyramid_image: float")
-        .Attr("T: {uint8, int8, int16, int32, int64, half, float, double}")
-        .Attr("min_size: float = 5.0")
-        .Attr("padding: int = 10")
-        .Attr("method: string = 'BILINEAR'")
-        .Attr("align_corners: bool = false");
-        //.SetShapeFn(ResizeShapeFn)
 
 
 

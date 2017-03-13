@@ -112,7 +112,3 @@ TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
 
 
 
-REGISTER_OP("FlatColor")
-        .Input("src: T")
-        .Output("output_image: T")
-        .Attr("T: {uint8, int8, int16, int32, int64, half, float, double}");

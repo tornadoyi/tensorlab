@@ -43,7 +43,7 @@ def build_py():
     shutil.copy(os.path.join(ROOT_PATH, "setup.py"), BUILD_PY_PATH)
 
     # copy lib
-    lib_path = os.path.join(BUILD_CC_PATH, "tensorlab/libtensorlab.so")
+    lib_path = os.path.join(BUILD_CC_PATH, "cc/tensorflow-ext/libtensorflow-ext.so")
     if not os.path.isfile(lib_path):
         print("{0} not exist".format(lib_path))
     else:
