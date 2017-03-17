@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
-
+/*
 #include "tensorflow/cc/client/client_session.h"
 #include "tensorflow/cc/ops/standard_ops.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -27,3 +27,4 @@ int test() {
     LOG(INFO) << outputs[0].matrix<float>();
     return 0;
 }
+ */

@@ -1,47 +1,26 @@
-
-
 import tensorflow as tf
 import numpy as np
 import tensorlab as tl
 from tensorlab.framework import *
+import math
+import dataset
+import cv
+from util import *
 
-
-model = Model()
-x1 = model.add_input(tf.int32, [None, None], name="x1")
-x2 = model.add_input(tf.int32, [None, None])
-res = Layer(tf.add)
-
-x1.adds([
-    Layer(tf.multiply, y=2),
-    Layer(tf.add, y=3),
-])
-
-x2.adds([
-    Layer(tf.div, y=2),
-    Layer(tf.add, y=-7),
-])
-
-
-res.adds([
-    Layer(tf.cast, dtype=tf.float32),
-    Layer(tf.log),
-])
-
-x1.tail.add(res)
-x2.tail.add(res)
-
-model.summary()
-
-with tf.Session() as sess:
-    x = np.random.randint(1, 10, size=(3, 3))
-    y = np.random.randint(1, 10, size=(3, 3))
-
-    x = np.array([[1, 1, 1], [2, 2, 2]])
-    y = np.array([[3, 3, 3], [4, 4, 4]])
-
-    result = model.run(sess, feed_dict = {"x1": x, x2: y})
-
-    for k, v in result.items():
-        print(k)
-        print(v)
-        print('-' * 10)
+def rotate_about_center(src, angle, scale=1.):
+    w = src.shape[1]
+    h = src.shape[0]
+    rangle = np.deg2rad(angle)  # angle in radians
+    # now calculate new image width and height
+    nw = (abs(np.sin(rangle)*h) + abs(np.cos(rangle)*w))*scale
+    nh = (abs(np.cos(rangle)*h) + abs(np.sin(rangle)*w))*scale
+    # ask OpenCV for the rotation matrix
+    rot_mat = cv2.getRotationMatrix2D((nw*0.5, nh*0.5), angle, scale)
+    # calculate the move from the old center to the new center combined
+    # with the rotation
+    rot_move = np.dot(rot_mat, np.array([(nw-w)*0.5, (nh-h)*0.5,0]))
+    # the move only affects the translation, so update the translation
+    # part of the transform
+    rot_mat[0,2] += rot_move[0]
+    rot_mat[1,2] += rot_move[1]
+    return cv2.warpAffine(src, rot_mat, (int(math.ceil(nw)), int(math.ceil(nh))), flags=cv2.INTER_LANCZOS4)

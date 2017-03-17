@@ -15,7 +15,7 @@
 import os
 import sys
 import shutil
-from setuptools import setup, find_packages, Command
+from setuptools import Extension, setup, find_packages, Command
 
 
 # Define version information

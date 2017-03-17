@@ -4,6 +4,7 @@ import inspect
 import tensorflow as tf
 
 
+
 module_path = os.path.dirname(__file__)
 tl = tf.load_op_library(os.path.join(module_path, "libtensorflow-ext.so"))
 

@@ -49,6 +49,12 @@ def build_py():
     else:
         shutil.copy(lib_path, "tensorlab")
 
+    lib_path = os.path.join(BUILD_CC_PATH, "cc/tensorlab/libtensorlab.so")
+    if not os.path.isfile(lib_path):
+        print("{0} not exist".format(lib_path))
+    else:
+        shutil.copyfile(lib_path, "tensorlab/tensorlab.so")
+
     # build tensorlab
     os.system("python setup.py install")
 
