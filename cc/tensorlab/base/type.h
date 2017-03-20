@@ -14,4 +14,11 @@
     Func(std::complex<float>,  cf) \
     Func(std::complex<double>, cd)
 
+
+#define DEF_REAL_NUMBER_TYPE_SUFFIX(Func) \
+    Func(int,                  i) \
+    Func(long,                 l) \
+    Func(float,                f) \
+    Func(double,               d)
+
 #endif //PROJECT_TYPE_H

@@ -2,9 +2,8 @@
 from node import Node
 
 class Layer(Node):
-    def __init__(self, op, **kwargs):
-        Node.__init__(self, **kwargs)
-        self._op = op
+    def __init__(self, op, *args, **kwargs):
+        Node.__init__(self, op, 1, *args, **kwargs)
 
     def __str__(self):
         base = Node.__str__(self)
@@ -13,6 +12,4 @@ class Layer(Node):
 
 
     @property
-    def op_name(self): return self._op.func_name
-
-    def tensor(self, *inputs): return self._op(*inputs, **self._kwargs)
+    def op_name(self): return self._core_func.func_name

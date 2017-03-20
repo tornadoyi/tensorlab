@@ -13,6 +13,7 @@
 using namespace Eigen;
 using namespace std;
 
+template <typename T>
 class Rectangle
 {
     /*!
@@ -29,10 +30,10 @@ class Rectangle
 public:
 
     Rectangle (
-            long l_,
-            long t_,
-            long r_,
-            long b_
+            T l_,
+            T t_,
+            T r_,
+            T b_
     ) :
             l(l_),
             t(t_),
@@ -41,13 +42,13 @@ public:
     {}
 
     Rectangle (
-            unsigned long w,
-            unsigned long h
+            T w,
+            T h
     ) :
             l(0),
             t(0),
-            r(static_cast<long>(w)-1),
-            b(static_cast<long>(h)-1)
+            r(static_cast<T>(w)-1),
+            b(static_cast<T>(h)-1)
     {
         TL_ASSERT((w > 0 && h > 0) || (w == 0 && h == 0),
                     "\tRectangle(width,height)"
@@ -59,7 +60,7 @@ public:
     }
 
     Rectangle (
-            const Point2l& p
+            const Point2D<T>& p
     ) :
             l(p.x()),
             t(p.y()),
@@ -69,11 +70,35 @@ public:
     }
 
     Rectangle (
-            const Point2l& p1,
-            const Point2l& p2
+            const Point2D<T>& p1,
+            const Point2D<T>& p2
     )
     {
         *this = Rectangle(p1) + Rectangle(p2);
+    }
+
+    static Rectangle create_with_center(Point2D<T> p, T width, T height)
+    {
+        return create_with_center(p[0], p[1], width, height);
+    }
+
+    static Rectangle create_with_center(T centerX, T centerY, T width, T height)
+    {
+        auto left = (centerX - width) / (T)2;
+        auto top = (centerY - height) / (T)2;
+        auto right = left + width - 1;
+        auto bottom = top + height - 1;
+        return Rectangle(left, top, right, bottom);
+    }
+
+    static Rectangle create_with_tlwh(Point2D<T> p, T widh, T height)
+    {
+        return create_with_tlwh(p[0], p[1], widh, height);
+    }
+
+    static Rectangle create_with_tlwh(T top, T left, T width, T height)
+    {
+        return Rectangle(left, top, left + width - 1, top + height - 1);
     }
 
     /*
@@ -95,49 +120,49 @@ public:
             b(-1)
     {}
 
-    void set_top(long, long){}
+    void set_top(T, T){}
 
-    long top (
+    T top (
     ) const { return t; }
 
-    long& top (
+    T& top (
     ) { return t; }
 
 
-    long left (
+    T left (
     ) const { return l; }
 
-    long& left (
+    T& left (
     ) { return l; }
 
 
-    long right (
+    T right (
     ) const { return r; }
 
-    long& right (
+    T& right (
     ) { return r; }
 
 
-    long bottom (
+    T bottom (
     ) const { return b; }
 
-    long& bottom (
+    T& bottom (
     ) { return b; }
 
 
-    const Point2l tl_corner (
-    ) const { return Point2l(left(), top()); }
+    const Point2D<T> tl_corner (
+    ) const { return Point2D<T>(left(), top()); }
 
-    const Point2l bl_corner (
-    ) const { return Point2l(left(), bottom()); }
+    const Point2D<T> bl_corner (
+    ) const { return Point2D<T>(left(), bottom()); }
 
-    const Point2l tr_corner (
-    ) const { return Point2l(right(), top()); }
+    const Point2D<T> tr_corner (
+    ) const { return Point2D<T>(right(), top()); }
 
-    const Point2l br_corner (
-    ) const { return Point2l(right(), bottom()); }
+    const Point2D<T> br_corner (
+    ) const { return Point2D<T>(right(), bottom()); }
 
-    unsigned long width (
+    T width (
     ) const
     {
         if (empty())
@@ -146,7 +171,7 @@ public:
             return r - l + 1;
     }
 
-    unsigned long height (
+    T height (
     ) const
     {
         if (empty())
@@ -155,16 +180,16 @@ public:
             return b - t + 1;
     }
 
-    unsigned long area (
+    T area (
     ) const
     {
         return width()*height();
     }
 
-    Point2l center (
+    Point2D<T> center (
     )
     {
-        Point2l temp(left() + right() + 1,
+        Point2D<T> temp(left() + right() + 1,
                    top() + bottom() + 1);
 
         if (temp.x() < 0)
@@ -210,7 +235,7 @@ public:
     }
 
     bool contains (
-            const Point2l& p
+            const Point2D<T>& p
     ) const
     {
         if (p.x() < l || p.x() > r || p.y() < t || p.y() > b)
@@ -219,8 +244,8 @@ public:
     }
 
     bool contains (
-            long x,
-            long y
+            T x,
+            T y
     ) const
     {
         if (x < l || x > r || y < t || y > b)
@@ -236,7 +261,7 @@ public:
     }
 
     Rectangle& operator+= (
-            const Point2l& p
+            const Point2D<T>& p
     )
     {
         *this = *this + Rectangle(p);
@@ -280,19 +305,29 @@ public:
 
 
 private:
-    long l;
-    long t;
-    long r;
-    long b;
+    T l;
+    T t;
+    T r;
+    T b;
 };
 
+template <typename T>
 inline std::ostream& operator<< (
         std::ostream& out,
-        const Rectangle& item
+        const Rectangle<T>& item
 )
 {
     out << "[(" << item.left() << ", " << item.top() << ") (" << item.right() << ", " << item.bottom() << ")]";
     return out;
 }
+
+
+#define DEF_ALL_CLASS(Type, Suffix) \
+    typedef Rectangle<Type> Rectangle##Suffix;
+
+
+DEF_REAL_NUMBER_TYPE_SUFFIX(DEF_ALL_CLASS);
+#undef DEF_ALL_CLASS
+
 
 #endif //PROJECT_RECTANGLE_H

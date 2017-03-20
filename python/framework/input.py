@@ -3,18 +3,21 @@ from node import Node
 
 
 class Input(Node):
-    def __init__(self, dtype, shape = None, **kwargs):
-        Node.__init__(self, **kwargs)
-        self._kwargs["dtype"] = dtype
-        self._kwargs["shape"] = shape
+    def __init__(self, *args, **kwargs):
+        Node.__init__(self, tf.placeholder, 0, *args, **kwargs)
 
 
     def __str__(self):
         base = Node.__str__(self)
-        output = "{0} {1}".format(base, self.get_attr("shape"))
+        output = "{0} {1}".format(base, self.shape)
         return output
 
 
-    def tensor(self, *args): return tf.placeholder(**self._kwargs)
+    @property
+    def dtype(self): return self.arg_attr("dtype")
+
+    @property
+    def shape(self): return self.arg_attr("shape")
+
 
 
