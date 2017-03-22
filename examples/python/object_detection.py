@@ -3,9 +3,12 @@ import numpy as np
 import tensorlab as tl
 from tensorlab.framework import *
 import math
-import dataset
 import cv
 from util import *
+from support import dataset
+from support.image import RandomCrop
+
+
 
 def rotate_about_center(src, angle, scale=1.):
     w = src.shape[1]
@@ -24,3 +27,21 @@ def rotate_about_center(src, angle, scale=1.):
     rot_mat[0,2] += rot_move[0]
     rot_mat[1,2] += rot_move[1]
     return cv2.warpAffine(src, rot_mat, (int(math.ceil(nw)), int(math.ceil(nh))), flags=cv2.INTER_LANCZOS4)
+
+
+def create_rectangle(t, l, w, h):
+    p = tl.Point2f(t, l)
+    return tl.Rectanglef.create_with_tlwh(p, w, h)
+images, labels = dataset.load_object_detection_xml("../data/testing.xml", create_rectangle)
+
+rand_crop = RandomCrop((200, 200))
+images_tensor, boxes = rand_crop(images, labels, 100)
+
+with tf.Session() as sess:
+    crop_images = images_tensor.eval()
+    print("crop_images.shape", crop_images.shape)
+
+    for img in crop_images:
+        cv2.imshow("crop", img)
+        press_key_stop()
+

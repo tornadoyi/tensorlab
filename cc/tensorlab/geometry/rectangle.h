@@ -84,21 +84,21 @@ public:
 
     static Rectangle create_with_center(T centerX, T centerY, T width, T height)
     {
-        auto left = (centerX - width) / (T)2;
-        auto top = (centerY - height) / (T)2;
+        auto left = centerX - width / (T)2;
+        auto top = centerY - height / (T)2;
         auto right = left + width - 1;
         auto bottom = top + height - 1;
-        return Rectangle(left, top, right, bottom);
+        return Rectangle<T>(left, top, right, bottom);
     }
 
-    static Rectangle create_with_tlwh(Point2D<T> p, T widh, T height)
+    static Rectangle create_with_tlwh(const Point2D<T>& p, T width, T height)
     {
-        return create_with_tlwh(p[0], p[1], widh, height);
+        return create_with_tlwh(p[0], p[1], width, height);
     }
 
     static Rectangle create_with_tlwh(T top, T left, T width, T height)
     {
-        return Rectangle(left, top, left + width - 1, top + height - 1);
+        return Rectangle<T>(left, top, left + width - 1, top + height - 1);
     }
 
     /*

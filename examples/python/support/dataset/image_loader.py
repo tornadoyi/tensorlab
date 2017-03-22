@@ -4,7 +4,7 @@ import xml.dom.minidom
 import numpy as np
 import cv2
 
-def load_xml(config_path):
+def load_object_detection_xml(config_path, label_class = None):
     dom = xml.dom.minidom.parse(config_path)
     root = dom.documentElement
     images = root.getElementsByTagName('images')[0]
@@ -23,7 +23,8 @@ def load_xml(config_path):
             width = int(box.getAttribute("width"))
             height = int(box.getAttribute("height"))
 
-            label_box.append((top, left, width, height))
+            label = (top, left, width, height) if label_class == None else label_class(top, left, width, height)
+            label_box.append(label)
 
         image_path = os.path.join(data_path, filename)
 

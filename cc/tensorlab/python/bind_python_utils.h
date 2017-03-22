@@ -57,6 +57,8 @@ using namespace boost::python;
 #define DECL_OPERATOR(cls, wname, op) auto wrap_##wname(const cls& a, const cls& b) -> decltype(a op b){return a op b;}
 
 
+#define DECL_GET_ITEM(cls, name, type) type wrap_##name(cls& o, int i){return o[i];}
+
 
 
 #define DECL_WRAP_STR(cls) \

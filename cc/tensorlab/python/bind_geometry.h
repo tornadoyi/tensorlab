@@ -49,13 +49,13 @@ namespace wrap_rectangle
                     .def("contains", REF_WRAP(contains_rect), arg("rect")) \
                     .def("intersect", REF_WRAP(intersect), arg("rect")) \
                     .def("create_with_center", REF_WRAP(create_with_center), arg("center"), arg("width"), arg("height")) \
-                    .def("create_with_tlwh", REF_WRAP(create_with_center), arg("center"), arg("width"), arg("height")) \
+                    .def("create_with_tlwh", REF_WRAP(create_with_tlwh), arg("center"), arg("width"), arg("height")) \
                     .def("__str__", REF_WRAP_STR) \
                     .def("__repr__", REF_WRAP_STR) \
                     .def(self == self) \
                     .def(self != self) \
                     .staticmethod("create_with_center") \
-                    .staticmethod("create_with_tlwd") \
+                    .staticmethod("create_with_tlwh") \
                     ; \
         } \
     }
@@ -89,6 +89,7 @@ namespace wrap_point
         DECL_OPERATOR(cls, add, +) \
         DECL_OPERATOR(cls, sub, -) \
         DECL_WRAP_STR(cls); \
+        DECL_GET_ITEM(cls, get_item, type) \
         void bind() \
         { \
             class_<cls>(#cls, "This object represents a point.") \
@@ -97,6 +98,7 @@ namespace wrap_point
                     .def("__repr__", REF_WRAP_STR) \
                     .def("__add__", REF_WRAP(add), arg("other")) \
                     .def("__sub__", REF_WRAP(sub), arg("other")) \
+                    .def("__getitem__", REF_WRAP(get_item)) \
                     ; \
         } \
     }
@@ -107,6 +109,7 @@ namespace wrap_point
         DECL_OPERATOR(cls, add, +) \
         DECL_OPERATOR(cls, sub, -) \
         DECL_WRAP_STR(cls); \
+        DECL_GET_ITEM(cls, get_item, type) \
         void bind() \
         { \
             class_<cls>(#cls, "This object represents a point.") \
@@ -115,6 +118,7 @@ namespace wrap_point
                     .def("__repr__", REF_WRAP_STR) \
                     .def("__add__", REF_WRAP(add), arg("other")) \
                     .def("__sub__", REF_WRAP(sub), arg("other")) \
+                    .def("__getitem__", REF_WRAP(get_item)) \
                     ; \
         } \
     }
