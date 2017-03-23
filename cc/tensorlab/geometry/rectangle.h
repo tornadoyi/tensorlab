@@ -260,6 +260,24 @@ public:
         return (rect + *this == *this);
     }
 
+    void clip(T min, T max)
+    {
+        clip_top_bottom(min, max);
+        clip_left_right(min, max);
+    }
+
+    void clip_top_bottom(T min, T max)
+    {
+        t = t < min ? min : t > max ? max : t;
+        b = b < min ? min : b > max ? max : b;
+    }
+
+    void clip_left_right(T min, T max)
+    {
+        l = l < min ? min : l > max ? max : l;
+        r = r < min ? min : r > max ? max : r;
+    }
+
     Rectangle& operator+= (
             const Point2D<T>& p
     )

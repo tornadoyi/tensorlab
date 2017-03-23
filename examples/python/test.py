@@ -5,17 +5,76 @@ import numpy as np
 import tensorlab as tl
 from tensorlab.framework import *
 import math
-import dataset
+from support import dataset
 import cv
 from util import *
 import threading
 import time
 
-images, labels = dataset.load_xml("../data/testing.xml")
+images, labels = dataset.load_object_detection_xml("../data/testing.xml")
 
 images = np.array([images[0], images[0], images[0], images[0], images[0]])
 
 image = np.array([images[0]])
+simage = images[0]
+
+a = np.array([[1,2,3], [4,5,6], [7,8,9]])
+
+
+def gen_transform_mat(image_shape, anchor, translate=[0, 0], angle=0, scale=[1, 1]):
+    anchor = np.array(anchor, dtype=np.float32)
+    translate = np.array(translate, dtype=np.float32)
+    scale = np.array(scale, dtype=np.float32)
+
+    r, c, d = image_shape
+    radian = np.deg2rad(angle)
+    r_mat = np.array([[np.cos(radian), np.sin(radian)],
+                      [-np.sin(radian), np.cos(radian)]], dtype=np.float32)
+
+    r_mat[0, 0] /= scale[0]
+    r_mat[1, 1] /= scale[1]
+
+    t_vec = np.dot(r_mat, anchor * -1) + anchor + np.array(translate)
+    mat = np.column_stack((r_mat, t_vec))
+    mat = np.array([list(mat[0]) + list(mat[1]) + [0] * 2], dtype=np.float32)
+
+    return mat
+
+b, r, c, d = image.shape
+mat = gen_transform_mat((r, c, d), (c/2, r/2), angle=30)
+tensor = tf.contrib.image.transform(image, mat)
+
+with tf.Session() as sess:
+    new_image = tensor.eval()[0]
+    cv2.imshow("crop", new_image)
+
+
+mat = mat[0]
+r_mat = np.array([mat[[0,1]], mat[[3,4]]])
+t_vec = mat[[2,5]]
+
+new_image = np.zeros_like(simage)
+
+for i in xrange(r):
+    for j in xrange(c):
+        point = np.array([j, i])
+        new_point = np.dot(r_mat, point) + t_vec
+        if new_point[0] < 0 or new_point[0] > c: continue
+        if new_point[1] < 0 or new_point[1] > r: continue
+        nx, ny = new_point[0], new_point[1]
+        new_image[ny, nx] = simage[i, j]
+
+cv2.imshow("mine", new_image)
+
+
+
+rot_mat = cv2.getRotationMatrix2D((c/2, r/2), -30, 1)
+rot_mat = np.column_stack((r_mat, t_vec))
+new_image = cv2.warpAffine(simage, rot_mat, (c, r), flags=cv2.INTER_LANCZOS4)
+cv2.imshow("cv", new_image)
+
+
+press_key_stop()
 
 '''
 exit_flag = False

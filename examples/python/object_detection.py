@@ -35,13 +35,21 @@ def create_rectangle(t, l, w, h):
 images, labels = dataset.load_object_detection_xml("../data/testing.xml", create_rectangle)
 
 rand_crop = RandomCrop((200, 200))
-images_tensor, boxes = rand_crop(images, labels, 100)
+images_tensor, image_rects = rand_crop(images, labels, 100)
 
 with tf.Session() as sess:
     crop_images = images_tensor.eval()
     print("crop_images.shape", crop_images.shape)
 
-    for img in crop_images:
+    for i in xrange(len(crop_images)):
+        img = crop_images[i]
+        rects = image_rects[i]
+        for r in rects:
+            cv2.rectangle(img, (int(r.left), int(r.top)), (int(r.right), int(r.bottom)), color=(0, 0, 255), thickness=2)
+            print("rect area:", r.area)
         cv2.imshow("crop", img)
+
+        #cv2.imshow("origin", images[0])
+        print("progress {0}/{1} rect:{2}".format(i+1, len(crop_images), len(rects)))
         press_key_stop()
 

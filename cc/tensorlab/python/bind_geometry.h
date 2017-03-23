@@ -29,6 +29,9 @@ namespace wrap_rectangle
         DECL_WRAP_CORE_1(cls_rect, contains, contains_rect, const cls_rect&) \
         DECL_WRAP_1(cls_rect, intersect, const cls_rect&) \
         DECL_WRAP_STR(cls_rect) \
+        DECL_WRAP_2(cls_rect, clip, type, type) \
+        DECL_WRAP_2(cls_rect, clip_top_bottom, type, type) \
+        DECL_WRAP_2(cls_rect, clip_left_right, type, type) \
         cls_rect wrap_create_with_center(cls_point a, type c, type d){return cls_rect::create_with_center(a,c,d);} \
         cls_rect wrap_create_with_tlwh(cls_point a, type c, type d){return cls_rect::create_with_tlwh(a,c,d);} \
         void bind() \
@@ -48,6 +51,9 @@ namespace wrap_rectangle
                     .def("contains", REF_WRAP(contains_point), arg("point")) \
                     .def("contains", REF_WRAP(contains_rect), arg("rect")) \
                     .def("intersect", REF_WRAP(intersect), arg("rect")) \
+                    .def("clip", REF_WRAP(clip), arg("min"), arg("max")) \
+                    .def("clip_top_bottom", REF_WRAP(clip_top_bottom), arg("min"), arg("max")) \
+                    .def("clip_left_right", REF_WRAP(clip_left_right), arg("min"), arg("max")) \
                     .def("create_with_center", REF_WRAP(create_with_center), arg("center"), arg("width"), arg("height")) \
                     .def("create_with_tlwh", REF_WRAP(create_with_tlwh), arg("center"), arg("width"), arg("height")) \
                     .def("__str__", REF_WRAP_STR) \
