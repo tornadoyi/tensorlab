@@ -10,17 +10,23 @@ class Node(object):
         self._kwargs = kwargs
         self._arg_dict = {}
 
-        arg_names = inspect.getargspec(core_func).args
+        parse = inspect.getargspec(core_func)
+        arg_names = parse.args
+        arg_defaults = parse.defaults
+
         for i in xrange(len(arg_names)):
             name = arg_names[i]
+            dft_index = i - len(arg_names)
             if i - arg_index < 0:
                 self._arg_dict[name] = None
-            else:
+            elif i - arg_index < len(args):
                 self._arg_dict[name] = args[i - arg_index]
-
-        for k, v in kwargs.items():
-            assert k in arg_names
-            self._arg_dict[k] = v
+            elif kwargs.has_key(name):
+                self._arg_dict[name] = kwargs[name]
+            elif -dft_index <= len(arg_defaults):
+                self._arg_dict[name] = arg_defaults[dft_index]
+            else:
+                raise Exception("function {0} need parameter {1}".format(core_func.__name__, name))
 
 
     def __str__(self):

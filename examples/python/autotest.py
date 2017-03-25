@@ -3,7 +3,6 @@ import select
 import numpy as np
 import tensorflow as tf
 import tensorlab as tl
-import dataset
 import cv2
 from time import sleep
 

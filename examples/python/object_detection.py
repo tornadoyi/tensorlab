@@ -1,55 +1,91 @@
+import math
+import cv
 import tensorflow as tf
 import numpy as np
 import tensorlab as tl
-from tensorlab.framework import *
-import math
-import cv
+from tensorlab.ops import batch_normalization as bn
 from util import *
 from support import dataset
 from support.image import RandomCrop
+import time
+
+def load_data(file):
+    def create_rectangle(t, l, w, h):
+        p = tl.Point2f(t, l)
+        return tl.Rectanglef.create_with_tlwh(p, w, h)
+
+    images, labels = dataset.load_object_detection_xml(file, create_rectangle)
+    return images, labels
 
 
 
-def rotate_about_center(src, angle, scale=1.):
-    w = src.shape[1]
-    h = src.shape[0]
-    rangle = np.deg2rad(angle)  # angle in radians
-    # now calculate new image width and height
-    nw = (abs(np.sin(rangle)*h) + abs(np.cos(rangle)*w))*scale
-    nh = (abs(np.cos(rangle)*h) + abs(np.sin(rangle)*w))*scale
-    # ask OpenCV for the rotation matrix
-    rot_mat = cv2.getRotationMatrix2D((nw*0.5, nh*0.5), angle, scale)
-    # calculate the move from the old center to the new center combined
-    # with the rotation
-    rot_move = np.dot(rot_mat, np.array([(nw-w)*0.5, (nh-h)*0.5,0]))
-    # the move only affects the translation, so update the translation
-    # part of the transform
-    rot_mat[0,2] += rot_move[0]
-    rot_mat[1,2] += rot_move[1]
-    return cv2.warpAffine(src, rot_mat, (int(math.ceil(nw)), int(math.ceil(nh))), flags=cv2.INTER_LANCZOS4)
+def create_model(input):
+    def weight(shape):
+        initial = tf.truncated_normal(shape, stddev=0.1)
+        return tf.Variable(initial)
+
+    def conv2d(x, W, strides, padding):
+        return tf.nn.conv2d(x, W, strides=strides, padding=padding)
+
+    tensor = input
+    tensor = conv2d(tensor, weight([5, 5, 3, 32]), [1, 2, 2, 1], padding="VALID")
+    tensor = conv2d(tensor, weight([5, 5, 32, 32]), [1, 2, 2, 1], padding="VALID")
+    tensor = conv2d(tensor, weight([5, 5, 32, 32]), [1, 2, 2, 1], padding="VALID")
+
+    tensor = conv2d(tensor, weight([3, 3, 32, 32]), [1, 1, 1, 1], padding="SAME")
+    tensor = conv2d(tensor, weight([3, 3, 32, 32]), [1, 1, 1, 1], padding="SAME")
+    tensor = conv2d(tensor, weight([3, 3, 32, 32]), [1, 1, 1, 1], padding="SAME")
+
+    tensor = conv2d(tensor, weight([6, 6, 32, 1]), [1, 1, 1, 1], padding="SAME")
+
+    return tensor
 
 
-def create_rectangle(t, l, w, h):
-    p = tl.Point2f(t, l)
-    return tl.Rectanglef.create_with_tlwh(p, w, h)
-images, labels = dataset.load_object_detection_xml("../data/testing.xml", create_rectangle)
 
-rand_crop = RandomCrop((200, 200))
-images_tensor, image_rects = rand_crop(images, labels, 100)
-
-with tf.Session() as sess:
-    crop_images = images_tensor.eval()
-    print("crop_images.shape", crop_images.shape)
-
-    for i in xrange(len(crop_images)):
-        img = crop_images[i]
-        rects = image_rects[i]
+def debug_images_rects(sess, images_tensor, rects_list):
+    result = sess.run([images_tensor])
+    images = result[0]
+    for i in xrange(len(images)):
+        img = images[i]
+        rects = rects_list[i]
         for r in rects:
-            cv2.rectangle(img, (int(r.left), int(r.top)), (int(r.right), int(r.bottom)), color=(0, 0, 255), thickness=2)
-            print("rect area:", r.area)
-        cv2.imshow("crop", img)
+            cv2.rectangle(img, (int(r.left), int(r.top)), (int(r.right), int(r.bottom)), color=(0, 0, 255),
+                          thickness=2)
 
-        #cv2.imshow("origin", images[0])
-        print("progress {0}/{1} rect:{2}".format(i+1, len(crop_images), len(rects)))
+        cv2.imshow("image", img)
+        print("progress {0}/{1} rect:{2}".format(i + 1, len(images), len(rects)))
         press_key_stop()
+
+
+def main():
+    crop_size = (200, 200)
+    crop_per_image = 30
+    pyramid_scale = 6
+
+    # load train datas
+    images, labels = load_data("../data/training.xml")
+
+    # create crop generator
+    croper = RandomCrop(crop_size)
+
+    # create model
+    input = tf.placeholder(tf.float32, (None, None, None, None))
+    model = create_model(input)
+
+
+    # train
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+
+    while True:
+        mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
+        mini_batch_samples = tl.image.pyramid(mini_batch_samples, pyramid_scale)
+        debug_images_rects(sess, mini_batch_samples, mini_batch_labels)
+        exit()
+
+    sess.close()
+
+
+if __name__ == "__main__":
+    main()
 

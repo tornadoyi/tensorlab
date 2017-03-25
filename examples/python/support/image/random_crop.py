@@ -30,18 +30,34 @@ class RandomCrop(object):
 
 
     def __call__(self, images, labels, crops_per_image):
-        image = images[0]
-        rects = labels[0]
+        assert len(images) == len(labels)
 
-        plans = []
-        for i in xrange(crops_per_image):
-            plan = self._make_plan(image.shape, rects)
-            plans.append(plan)
+        # gen tensors and rects for all images
+        crop_tensor_list = []
+        crop_rects_list = []
+        for i in xrange(len(images)):
+            image = images[i]
+            rects = labels[i]
 
-        crops_tensor = self.gen_extract_image_chip_tensor(image, plans)
-        crop_rects = self.gen_crop_image_rects(image.shape, rects, plans)
+            plans = []
+            for i in xrange(crops_per_image):
+                plan = self._make_plan(image.shape, rects)
+                plans.append(plan)
 
-        return crops_tensor, crop_rects
+            crop_tensor_list += self.gen_extract_image_chip_tensor(image, plans)
+            crop_rects_list += self.gen_crop_image_rects(image.shape, rects, plans)
+
+        # shuffle and concat tensor
+        index = range(len(crop_tensor_list))
+        np.random.shuffle(index)
+        crop_tensor = None
+        crop_rects = []
+        for i in index:
+            t = crop_tensor_list[i]
+            crop_tensor = t if crop_tensor is None else tf.concat([crop_tensor, t], 0)
+            crop_rects.append(crop_rects_list[i])
+
+        return crop_tensor, crop_rects
 
 
     def gen_extract_image_chip_tensor(self, image, plans):
@@ -73,20 +89,17 @@ class RandomCrop(object):
 
         # flip
         chip_r, chip_c = self._chips_dims
-        flip_tensor = None
+        flip_tensors = []
         for i in xrange(len(plans)):
             plan = plans[i]
             tensor = crops_tensor[i]
             if plan.flip:
                 tensor = tf.image.flip_left_right(tensor)
+
             tensor = tf.reshape(tensor, (1, chip_r, chip_c, d))
+            flip_tensors.append(tensor)
 
-            if flip_tensor is None:
-                flip_tensor = tensor
-            else:
-                flip_tensor = tf.concat([flip_tensor, tensor], 0)
-
-        return flip_tensor
+        return flip_tensors
 
 
     def gen_crop_image_rects(self, image_shape, rects, plans):
