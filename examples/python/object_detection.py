@@ -79,6 +79,19 @@ def debug_images_rects(sess, images_tensor, rects_list):
         press_key_stop()
 
 
+class mmod_loss(object):
+    def __init__(self,
+                 detector_width,
+                 detector_height,
+                 loss_per_false_alarm = 1,
+                 loss_per_missed_target = 1,
+                 truth_match_iou_threshold = 0.5,):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+
 def main():
     crop_size = (200, 200)
     crop_per_image = 30
@@ -109,11 +122,12 @@ def main():
 
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
         mini_batch_samples = tl.image.pyramid(mini_batch_samples, pyramid_scale)
-        #debug_images_rects(sess, mini_batch_samples, mini_batch_labels)
+        debug_images_rects(sess, mini_batch_samples, mini_batch_labels)
+        exit()
 
         mini_batch_samples = sess.run([mini_batch_samples])[0]
         sess.run([model]+update_vars, feed_dict={input: mini_batch_samples})
-        exit()
+
 
 
     sess.close()
