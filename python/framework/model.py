@@ -1,5 +1,6 @@
 import os
 from tensor import Tensor
+from types import TypeType
 
 
 class Model(object):
@@ -17,6 +18,14 @@ class Model(object):
 
 
     def add(self, tensor_func, *args, **kwargs):
+        '''
+        if isinstance(tensor_func, Tensor):
+            tensor = tensor_func
+        elif isinstance(tensor_func, TypeType):
+            tensor = tensor_func(*args, **kwargs)
+        else:
+            tensor = Tensor(tensor_func, *args, **kwargs)
+        '''
         tensor = Tensor(tensor_func, *args, **kwargs)
         self._tensors.append(tensor)
 
