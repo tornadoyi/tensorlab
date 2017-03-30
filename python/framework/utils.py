@@ -12,7 +12,7 @@ def shape(t):
 
     elif isinstance(t, tf.Tensor) or \
          isinstance(t, tf.Variable) or \
-         isinstance(t, tf.Constant):
+         isinstance(t, tf.constant):
 
         tensor_shape =  t.get_shape()
         return tuple([d.value for d in tensor_shape])
