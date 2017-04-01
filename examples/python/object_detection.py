@@ -156,11 +156,16 @@ class Model(framework.Model):
 
 
 
-def debug_images_rects(sess, images_tensor, rects_list):
-    result = sess.run([images_tensor])
-    images = result[0]
+def debug_images_rects(sess, images_tensor, plans, rects_list):
+    result = sess.run([images_tensor, plans])
+    images, plans = result
     for i in xrange(len(images)):
         img = images[i]
+
+        for p in plans[1:]:
+            y, x, h, w = p
+            cv2.rectangle(img, (x, y), (x + w - 1, y + h - 1), color=(255, 0, 0), thickness=2)
+
         rects = rects_list[i]
         for r in rects:
             cv2.rectangle(img, (int(r.left), int(r.top)), (int(r.right), int(r.bottom)), color=(0, 0, 255),
@@ -241,9 +246,10 @@ def main():
         is_train = sess.run([set_is_training, is_training])[1]
 
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
-        mini_batch_samples = tl.image.pyramid(mini_batch_samples, pyramid_scale)
-        #debug_images_rects(sess, mini_batch_samples, mini_batch_labels)
-
+        plans = tl.image.pyramid_plan(crop_size, pyramid_scale)
+        mini_batch_samples = tl.image.pyramid_apply(mini_batch_samples, plans)
+        debug_images_rects(sess, mini_batch_samples, plans, mini_batch_labels)
+        break
 
         mini_batch_samples = sess.run([mini_batch_samples])[0]
 

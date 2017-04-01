@@ -15,116 +15,174 @@ template <typename Device, typename T>
 class AssignImageOp : public OpKernel
 {
 public:
-    explicit AssignImageOp(OpKernelConstruction* context) : OpKernel(context){}
+    explicit AssignImageOp(OpKernelConstruction* context) : OpKernel(context)
+    {
+
+    }
 
     void Compute(OpKernelContext* context) override
     {
         const Tensor& src_tensor = context->input(0);
         const Tensor& dst_tensor = context->input(1);
-        auto start_loc = context->input(2);
-        auto Svec = start_loc.vec<int32>();
-        int startx = Svec(0);
-        int starty = Svec(1);
+        const Tensor& rects_tensor = context->input(2);
+        const Tensor& indexes_tensor = context->input(3);
 
-        OP_REQUIRES(context, src_tensor.dims() == 3 || src_tensor.dims() == 4,
-                    errors::InvalidArgument("image must be 3-dimensional or 4-dimensional",
-                                            src_tensor.shape().DebugString(), dst_tensor.shape().DebugString()));
 
-        OP_REQUIRES(context, src_tensor.dims() == dst_tensor.dims(),
-                    errors::InvalidArgument("src and dst must be same dimensional",
-                                            src_tensor.shape().DebugString(), dst_tensor.shape().DebugString()));
+        OP_REQUIRES(context,
+                    src_tensor.dims() == 4 &&
+                    dst_tensor.dims() == 4 &&
+                    _nd(src_tensor) == _nd(dst_tensor),
+                    errors::InvalidArgument("image src and dst must be 4-dimensional ",
+                                            "src: ", src_tensor.shape().DebugString(), " ",
+                                            "dst: ", dst_tensor.shape().DebugString(), " "
+                    ));
 
-        OP_REQUIRES(context, start_loc.dims() == 1,
-                    errors::InvalidArgument("location must be 1-dimensional",
-                                            start_loc.shape().DebugString()));
 
-        OP_REQUIRES(context, startx + _nr(src_tensor) <= _nr(dst_tensor) &&
-                starty + _nc(src_tensor) <= _nc(dst_tensor),
-                    errors::InvalidArgument("assign image out of bound",
-                                            start_loc.shape().DebugString()));
+        OP_REQUIRES(context, rects_tensor.dims() == 2 &&
+                    rects_tensor.dim_size(0) == src_tensor.dim_size(0) &&
+                    rects_tensor.dim_size(1) == 4,
+                    errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x 4)",
+                                            rects_tensor.shape().DebugString()));
+
+
+        OP_REQUIRES(context, indexes_tensor.dims() == 2 && indexes_tensor.dim_size(1) == 3,
+                    errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x 4)",
+                                            rects_tensor.shape().DebugString()));
+
+
 
         Tensor* output;
         OP_REQUIRES_OK(context, context->allocate_output(0, dst_tensor.shape(), &output));
         CHECK(output->CopyFrom(dst_tensor, dst_tensor.shape()));
 
 
-        if(src_tensor.dims() == 3)
-        {
-            kernel::AssignImage<Device, T, 3>()(context->eigen_device<Device>(),
-                                                src_tensor.tensor<T, 3>(),
-                                                startx, starty,
-                                                output->tensor<T, 3>());
-        }
-        else
-        {
-            kernel::AssignImage<Device, T, 4>()(context->eigen_device<Device>(),
-                                                src_tensor.tensor<T, 4>(),
-                                                startx, starty,
-                                                output->tensor<T, 4>());
-        }
+        kernel::AssignImage<Device, T>()(context->eigen_device<Device>(),
+                                         src_tensor.tensor<T, 4>(),
+                                         rects_tensor.tensor<int32, 2>(),
+                                         indexes_tensor.tensor<int32, 2>(),
+                                         output->tensor<float, 4>());
 
     }
+
 };
 
 
 
 namespace kernel
 {
-    template <typename T, size_t NDIMS>
-    struct AssignImage<CPUDevice, T, NDIMS>
+    template <typename T>
+    struct AssignImage<CPUDevice, T>
     {
         void operator()(const CPUDevice& d,
-                        typename TTypes<T, NDIMS>::ConstTensor src,
-                        int startx,
-                        int starty,
-                        typename TTypes<T, NDIMS>::Tensor dst)
+                        typename TTypes<T, 4>::ConstTensor src_data,
+                        typename TTypes<int32, 2>::ConstTensor rects,
+                        typename TTypes<int32, 2>::ConstTensor indexes,
+                        typename TTypes<float, 4>::Tensor output_data)
         {
-            int64 batch = NDIMS <= 3 ? 1 : _nb(src);
+            auto b_in = _nb(src_data);
+            auto b_out = _nb(output_data);
+            auto b_rect = rects.dimension(0);
+            auto channel = _nd(output_data);
 
-            auto channel = _nd(src);
-            const T* ptr_src = src.data();
-            T* ptr_dst = dst.data();
+            auto r_out = _nr(output_data);
+            auto c_out = _nc(output_data);
 
-            auto size_src_row = _nc(src) * channel;
-            auto size_dst_row = _nc(dst) * channel;
-            auto size_src_img = size_src_row * _nr(src);
-            auto size_dst_img = size_dst_row * _nr(dst);
+            auto r_in = _nr(src_data);
+            auto c_in = _nc(src_data);
 
-            int64 init_src = 0;
-            int64 init_dst = (startx * _nc(dst) + starty) * channel;
-            for(int64 n=0; n<batch; ++n)
+
+            auto index_count = indexes.dimension(0);
+
+            for (int64 i = 0; i < index_count; ++i)
             {
-                auto st_src = init_src;
-                auto st_dst = init_dst;
-                for(int64 i=0; i<_nr(src); ++i)
-                {
-                    auto p_src = st_src;
-                    auto p_dst = st_dst;
-                    for (int64 j = 0; j < _nc(src); ++j)
-                    {
-                        for(int64 k=0; k<channel; ++k)
-                            ptr_dst[p_dst + k] = ptr_src[p_src + k];
+                auto idx_src = indexes(i, 0);
+                auto idx_dst = indexes(i, 1);
+                auto idx_rect = indexes(i, 2);
 
-                        p_src += channel;
-                        p_dst += channel;
-                    }
-                    st_src += size_src_row;
-                    st_dst += size_dst_row;
+
+                if(idx_src <0 || idx_src >= b_in ||
+                        idx_rect < 0 || idx_rect >= b_rect ||
+                        idx_dst < 0 || idx_dst >= b_out)
+                {
+                    LOG(ERROR) << "out of range "
+                               << "idx_src: " << idx_src << "<" << b_in << " "
+                               << "idx_dst: " << idx_dst << "<" << idx_dst << " "
+                               << "idx_rect: " << idx_rect << "<" << b_rect << " ";
+
+                    continue;
                 }
 
-                ptr_src += size_src_img;
-                ptr_dst += size_dst_img;
-            }
+
+                auto st_y = rects(idx_rect, 0);
+                auto st_x = rects(idx_rect, 1);
+                auto totol_row = rects(idx_rect, 2);
+                auto totol_col = rects(idx_rect, 3);
+
+                float scale_r = (float)r_in / (float)totol_row;
+                float scale_c = (float)c_in / (float)totol_col;
+
+                //LOG(INFO) << st_y << " " << st_x << " " <<totol_row << " " << totol_col;
+                //LOG(INFO) << scale_r << " " << scale_c;
+
+                for(int64 y=st_y; y < st_y+totol_row; ++y)
+                {
+                    // map output location-y to input-y
+                    auto in_y = (y-st_y) * scale_r;
+                    auto lower_in_y = static_cast<int64>(in_y);
+                    auto upper_in_y = std::min(lower_in_y + 1, r_in - 1);
+                    auto lerp_in_y = in_y - lower_in_y;
+
+                    for(int64 x=st_x; x < st_x+totol_col; ++x)
+                    {
+                        // map output location-x to input-x
+                        auto in_x = (x-st_x) * scale_c;
+                        auto lower_in_x = static_cast<int64>(in_x);
+                        auto upper_in_x = std::min(lower_in_x + 1, c_in - 1);
+                        auto lerp_in_x = in_x - lower_in_x;
+
+                        //LOG(INFO)<<"lower_in_x: " << lower_in_x << " " <<"upper_in_x: " << upper_in_x << " ";
+
+
+                        for(int64 d=0; d < channel; ++d)
+                        {
+                            auto tl = (float)src_data(idx_src, lower_in_y, lower_in_x, d);
+                            auto tr = (float)src_data(idx_src, lower_in_y, upper_in_x, d);
+                            auto bl = (float)src_data(idx_src, upper_in_y, lower_in_x, d);
+                            auto br = (float)src_data(idx_src, upper_in_y, upper_in_x, d);
+
+
+                            // calculate lerp
+                            const auto top = tl + (tr - tl) * lerp_in_x;
+                            const auto bottom = bl + (br - bl) * lerp_in_x;
+                            auto lerp = top + (bottom - top) * lerp_in_y;
+                            output_data(idx_dst, y, x, d) = lerp;
+
+                            /*
+                            LOG(INFO)<<"y: " << y << " " << "x: " << x << " "
+                                     <<"tl: " << tl << " "
+                                     <<"tr: " << tr << " "
+                                     <<"bl: " << bl << " "
+                                     <<"br: " << br << " "
+                                     <<"lerp_in_x: " << lerp_in_x << " "
+                                     <<"lerp_in_y: " << lerp_in_y << " ";
+                            LOG(INFO) << "top: " << top << " bottom: " << bottom << " lerp: "<<lerp;
+                            */
+
+                        }
+                    }
+                }// for(int64 y=0; y < r_out; ++y)
+
+            }// for (int64 b = 0; b < batch; ++b)
+
         }
 
     };
 
 
 #define DEFINE_CPU_SPECS(T)                     \
-    template struct AssignImage<CPUDevice, T, 3>; \
-    template struct AssignImage<CPUDevice, T, 4>;
+    template struct AssignImage<CPUDevice, T>; \
 
-    TF_CALL_REAL_NUMBER_TYPES(DEFINE_CPU_SPECS);
+TF_CALL_REAL_NUMBER_TYPES(DEFINE_CPU_SPECS);
 
 #undef DEFINE_CPU_SPECS
 }
