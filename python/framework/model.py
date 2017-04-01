@@ -32,6 +32,7 @@ class Model(object):
         '''
         tensor = Tensor(tensor_func, *args, **kwargs)
         self._tensors.append(tensor)
+        return tensor
 
 
     def tensor(self, index):

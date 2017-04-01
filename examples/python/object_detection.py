@@ -21,6 +21,24 @@ def load_data(file):
     return images, labels
 
 
+class Input(framework.Model):
+    def __init__(self, image_size, pyramid_scale):
+        framework.Model.__init__(self)
+        self._image_size = image_size
+        self._pyramid_scale = pyramid_scale
+        self._gen_net()
+
+
+    @property
+    def intput(self): return self._input
+
+    def _gen_net(self):
+        self._input = tf.placeholder(dtype=tf.float32, shape=(None, None, None, None))
+        self._plan_tensor = self.add(tl.image.pyramid_plan, self._image_size, self._pyramid_scale)
+        self.add(tl.image.pyramid_apply, self._input, self.out)
+
+
+
 
 class Model(framework.Model):
     def __init__(self, input, is_training):
@@ -65,7 +83,6 @@ class Model(framework.Model):
 
         def bn(inputs, is_traning):
             return tf.layers.batch_normalization(inputs, training=is_traning)
-
 
         self.add(conv2d, input, weight([5, 5, 3, 32]), bias([32]), [1, 2, 2, 1], padding="VALID")
         self.add(bn, self.out, is_training)
@@ -215,10 +232,12 @@ def main():
     # create crop generator
     croper = RandomCrop(crop_size)
 
+    # create input layer
+    input_layer = Input(crop_size, pyramid_scale)
+
     # create model
-    input = tf.placeholder(tf.float32, (None, None, None, None))
     is_training = tf.Variable(False, dtype=tf.bool)
-    model = Model(input, is_training)
+    model = Model(input_layer.out, is_training)
 
     # create loss
     loss = mmod_loss(model, 40, 40)
@@ -246,13 +265,9 @@ def main():
         is_train = sess.run([set_is_training, is_training])[1]
 
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
-        plans = tl.image.pyramid_plan(crop_size, pyramid_scale)
-        mini_batch_samples = tl.image.pyramid_apply(mini_batch_samples, plans)
-        #debug_images_rects(sess, mini_batch_samples, plans, mini_batch_labels)
+        mini_batch_samples = sess.run(mini_batch_samples)
 
-
-        mini_batch_samples = sess.run([mini_batch_samples])[0]
-        model.run(sess, update_vars, feed_dict={input: mini_batch_samples})
+        model.run(sess, update_vars, feed_dict={input_layer.intput: mini_batch_samples})
 
         print("once finish")
         exit()

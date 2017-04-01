@@ -42,3 +42,11 @@ REGISTER_OP("PyramidPlan")
         .Attr("padding: int = 10")
         .Output("output_image: T")
         .Attr("T: {int32, int64}");
+
+
+REGISTER_OP("PointToResizeSpace")
+        .Input("point: T")
+        .Input("scale: float")
+        .Input("index: int32")
+        .Output("output_image: T")
+        .Attr("T: {uint8, int8, int16, int32, int64, half, float, double}");
