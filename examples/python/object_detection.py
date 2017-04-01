@@ -248,11 +248,10 @@ def main():
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
         plans = tl.image.pyramid_plan(crop_size, pyramid_scale)
         mini_batch_samples = tl.image.pyramid_apply(mini_batch_samples, plans)
-        debug_images_rects(sess, mini_batch_samples, plans, mini_batch_labels)
-        break
+        #debug_images_rects(sess, mini_batch_samples, plans, mini_batch_labels)
+
 
         mini_batch_samples = sess.run([mini_batch_samples])[0]
-
         model.run(sess, update_vars, feed_dict={input: mini_batch_samples})
 
         print("once finish")

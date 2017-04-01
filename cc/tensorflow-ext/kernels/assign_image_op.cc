@@ -47,7 +47,7 @@ public:
 
         OP_REQUIRES(context, indexes_tensor.dims() == 2 && indexes_tensor.dim_size(1) == 3,
                     errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x 4)",
-                                            rects_tensor.shape().DebugString()));
+                                            indexes_tensor.shape().DebugString()));
 
 
 

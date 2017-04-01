@@ -69,7 +69,7 @@ public:
                 ptr_index(index, 0) = i;   // src
                 ptr_index(index, 1) = i;   // dst
                 ptr_index(index, 2) = j;   // rect
-                
+
             }
         }
 
