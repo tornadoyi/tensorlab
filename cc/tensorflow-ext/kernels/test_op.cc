@@ -1,47 +1,96 @@
+
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/register_types.h"
+#include "image_tool.h"
+#include "test_op.h"
 
 using namespace tensorflow;
 
-class TestOp : public OpKernel {
- public:
-  explicit TestOp(OpKernelConstruction* context) : OpKernel(context) {}
+typedef Eigen::ThreadPoolDevice CPUDevice;
 
-  void Compute(OpKernelContext* context) override {
-    // Grab the input tensor
-    const Tensor& input_tensor = context->input(0);
-    auto input = input_tensor.flat<int32>();
 
-    // Create an output tensor
-    Tensor* output_tensor = NULL;
-    OP_REQUIRES_OK(context, context->allocate_output(0, input_tensor.shape(),
-                                                     &output_tensor));
-    auto output = output_tensor->flat<int32>();
+template <typename Device, typename T>
+class TestOp : public OpKernel
+{
+public:
+    explicit TestOp(OpKernelConstruction* context) : OpKernel(context)
+    {
 
-    // Set all but the first element of the output tensor to 0.
-    const int N = input.size();
-    for (int i = 1; i < N; i++) {
-      output(i) = 0;
     }
 
-    // Preserve the first input value if possible.
-    if (N > 0) output(0) = input(0);
-  }
+    void Compute(OpKernelContext* context) override
+    {
+        const Tensor& src_tensor = context->input(0);
+        const Tensor& dst_tensor = context->input(1);
+
+
+        OP_REQUIRES(context,
+                    src_tensor.dims() == dst_tensor.dims(),
+                    errors::InvalidArgument("image src and dst must be same ",
+                                            "src: ", src_tensor.shape().DebugString(), " ",
+                                            "dst: ", dst_tensor.shape().DebugString(), " "
+                    ));
+
+
+
+        Tensor* output1;
+        OP_REQUIRES_OK(context, context->allocate_output(0, src_tensor.shape(), &output1));
+        CHECK(output1->CopyFrom(src_tensor, src_tensor.shape()));
+
+        Tensor* output2;
+        OP_REQUIRES_OK(context, context->allocate_output(1, dst_tensor.shape(), &output2));
+        CHECK(output2->CopyFrom(dst_tensor, dst_tensor.shape()));
+
+
+
+    }
+
 };
 
 
-REGISTER_KERNEL_BUILDER(Name("Test").Device(DEVICE_CPU), TestOp);
 
-REGISTER_KERNEL_BUILDER(Name("Test").Device(DEVICE_GPU), TestOp);
+namespace kernel
+{
+    template <typename T>
+    struct Test<CPUDevice, T>
+    {
+        void operator()(const CPUDevice& d,
+                        typename TTypes<T, 4>::ConstTensor src_data,
+                        typename TTypes<float, 2>::ConstTensor rects,
+                        typename TTypes<int32, 2>::ConstTensor indexes,
+                        typename TTypes<float, 4>::Tensor output_data) try
+        {
 
-REGISTER_OP("Test")
-    .Input("to_zero: int32")
-    .Output("zeroed: int32")
-    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      c->set_output(0, c->input(0));
-      return Status::OK();
-    });
+
+        }
+        catch(std::exception& e)
+        {
+            LOG(FATAL) << e.what();
+        }
+    };
+
+
+#define DEFINE_CPU_SPECS(T)                     \
+    template struct Test<CPUDevice, T>; \
+
+    TF_CALL_REAL_NUMBER_TYPES(DEFINE_CPU_SPECS);
+
+#undef DEFINE_CPU_SPECS
+}
+
+
+#define REGISTER_KERNEL(T)                            \
+  REGISTER_KERNEL_BUILDER(Name("Test")      \
+                              .Device(DEVICE_CPU)     \
+                              .TypeConstraint<T>("T"), \
+                          TestOp<CPUDevice, T>);
+
+
+
+TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
+#undef REGISTER_KERNEL
 
 
 

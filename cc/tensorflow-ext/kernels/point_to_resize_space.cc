@@ -59,7 +59,7 @@ public:
                                                 point_tensor.tensor<T, 2>(),
                                                 scale_tensor.tensor<float, 2>(),
                                                 indexes_tensor.tensor<int32, 2>(),
-                                                output->tensor<float, 2>());
+                                                output->tensor<T, 2>());
 
     }
 
@@ -76,7 +76,7 @@ namespace kernel
                         typename TTypes<T, 2>::ConstTensor points,
                         typename TTypes<float, 2>::ConstTensor scales,
                         typename TTypes<int32, 2>::ConstTensor indexes,
-                        typename TTypes<float, 2>::Tensor output_data)
+                        typename TTypes<T, 2>::Tensor output_data)
         {
             auto n_points = points.dimension(0);
             auto n_scales = scales.dimension(0);
@@ -108,16 +108,26 @@ namespace kernel
                 auto lower_in_y = static_cast<int64>(in_y);
                 auto upper_in_y = lower_in_y + 1;
                 auto lerp_in_y = in_y - lower_in_y;
-                auto dst_y = (int64)((upper_in_y - lower_in_y) * lerp_in_y);
+                auto dst_y = (T)(lower_in_y + (upper_in_y - lower_in_y) * lerp_in_y);
 
                 auto in_x = (float)x * s_x;
                 auto lower_in_x = static_cast<int64>(in_x);
                 auto upper_in_x = lower_in_x + 1;
                 auto lerp_in_x = in_x - lower_in_x;
-                auto dst_x = (int64)((upper_in_x - lower_in_x) * lerp_in_x);
+                auto dst_x = (T)(lower_in_x + (upper_in_x - lower_in_x) * lerp_in_x);
 
                 output_data(i, 0) = dst_y;
                 output_data(i, 1) = dst_x;
+
+                /*
+                LOG(INFO) << "y " << y << " "
+                          << "s_y " << s_y << " "
+                          << "in_y " << in_y << " "
+                          << "lower_in_y " << lower_in_y << " "
+                          << "upper_in_y " << upper_in_y << " "
+                          << "lerp_in_y " << lerp_in_y << " "
+                          << "dst_y " << dst_y << " ";
+                          */
             }
         }
 

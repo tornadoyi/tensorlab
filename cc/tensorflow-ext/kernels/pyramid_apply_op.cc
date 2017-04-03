@@ -28,21 +28,26 @@ public:
     void Compute(OpKernelContext* context) override
     {
         const Tensor& input_tensor = context->input(0);
-        const Tensor& rect_tensor = context->input(1);
+        const Tensor& size_tensor = context->input(1);
+        const Tensor& rect_tensor = context->input(2);
 
 
         OP_REQUIRES(context, input_tensor.dims() == 4,
                     errors::InvalidArgument("image must be 4-dimensional",
                                             input_tensor.shape().DebugString()));
 
+        OP_REQUIRES(context, size_tensor.dims() == 1 && size_tensor.dim_size(0) == 2,
+                    errors::InvalidArgument("size must be 1-dimensional, with (height, width)",
+                                            input_tensor.shape().DebugString()));
 
         OP_REQUIRES(context, rect_tensor.dims() == 2 && rect_tensor.dim_size(1) == 4,
                     errors::InvalidArgument("rect shape must be N x 4 ",
                                             rect_tensor.shape().DebugString()));
 
-        auto rects = rect_tensor.tensor<int32, 2>();
-        auto output_height = rects(0, 2);
-        auto output_width = rects(0, 3);
+        auto p_size = size_tensor.vec<int32>();
+        auto output_height = p_size(0);
+        auto output_width = p_size(1);
+
 
         Tensor* output_tensor;
         OP_REQUIRES_OK(context, context->allocate_output(
@@ -53,22 +58,22 @@ public:
         Tensor indexes_tensor;
         OP_REQUIRES_OK(context, context->allocate_temp(
                 DataTypeToEnum<int32>::v(),
-                TensorShape({_nb(input_tensor) * (rect_tensor.dim_size(0) - 1), 3}),
+                TensorShape({_nb(input_tensor) * rect_tensor.dim_size(0), 3}),
                 &indexes_tensor));
 
 
         // generate indexes
-        auto ptr_index = indexes_tensor.tensor<int32, 2>();
+        auto p_index = indexes_tensor.tensor<int32, 2>();
         auto batch = _nb(input_tensor);
         for(int64 i=0; i<_nb(input_tensor); ++i)
         {
-            auto st = i * (rect_tensor.dim_size(0) - 1);
-            for(int32 j=1; j<rect_tensor.dim_size(0); ++j)
+            auto st = i * rect_tensor.dim_size(0);
+            for(int32 j=0; j<rect_tensor.dim_size(0); ++j)
             {
-                auto index = st + j-1;
-                ptr_index(index, 0) = i;   // src
-                ptr_index(index, 1) = i;   // dst
-                ptr_index(index, 2) = j;   // rect
+                auto index = st + j;
+                p_index(index, 0) = i;   // src
+                p_index(index, 1) = i;   // dst
+                p_index(index, 2) = j;   // rect
 
             }
         }
@@ -77,7 +82,7 @@ public:
         kernel::AssignImage<Device, T>()(
                 context->eigen_device<Device>(),
                 input_tensor.tensor<T, 4>(),
-                rect_tensor.tensor<int32, 2>(),
+                rect_tensor.tensor<float, 2>(),
                 ((const Tensor)indexes_tensor).tensor<int32, 2>(),
                 output_tensor->tensor<float, 4>()
         );

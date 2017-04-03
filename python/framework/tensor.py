@@ -59,6 +59,8 @@ class Tensor(object):
 
     def __div__(self, other): return Tensor(lambda x,y: x / y, self.tensor, other)
 
+    def __getitem__(self, item): return Tensor(lambda t,i: t[i], self.tensor, item)
+
     @property
     def core_type(self): return self._core_type
 

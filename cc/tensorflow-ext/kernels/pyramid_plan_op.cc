@@ -29,50 +29,52 @@ public:
     void Compute(OpKernelContext* context) override
     {
         const Tensor& size_tensor = context->input(0);
-        const Tensor& scaletensor = context->input(1);
+        const Tensor& scale_tensor = context->input(1);
 
 
-        OP_REQUIRES(context, size_tensor.dims() == 1,
-                    errors::InvalidArgument("size must be 1-dimensional",
+        OP_REQUIRES(context, size_tensor.dims() == 1 && size_tensor.dim_size(0) == 2,
+                    errors::InvalidArgument("size must be 1-dimensional with (height, width)",
                                             size_tensor.shape().DebugString()));
 
-        OP_REQUIRES(context, size_tensor.NumElements() == 2,
-                    errors::InvalidArgument("size must be 2 elements",
-                                            size_tensor.DebugString()));
+        OP_REQUIRES(context, TensorShapeUtils::IsScalar(scale_tensor.shape()),
+                    errors::InvalidArgument("scale must be scalar",
+                                            scale_tensor.DebugString()));
 
-        auto input_size = size_tensor.flat<T>();
-        auto scale = scaletensor.flat<T>()(0);
+        auto scale = scale_tensor.flat<T>()(0);
 
+        auto input_size = size_tensor.vec<T>();
         T input_r = input_size(0);
         T input_c = input_size(1);
 
-        std::vector<std::tuple<T, T, T, T>> rects;
+        std::vector<std::tuple<float, float, float, float>> rects;
         T output_width, output_height;
         MakePyramidPlan<T>()(input_r, input_c, scale, min_size, padding, output_height, output_width, rects);
         //LOG(INFO) << output_height << " " << output_width;
 
-        Tensor* output_tensor;
+        Tensor* output_size_tensor;
         OP_REQUIRES_OK(context, context->allocate_output(
                 0,
-                TensorShape({int64(rects.size()+1), 4}),
-                &output_tensor));
+                TensorShape({2}),
+                &output_size_tensor));
 
-        typename TTypes<T, 2>::Tensor output = output_tensor->tensor<T, 2>();
-        T* ptr = output.data();
-        ptr[0] = 0;
-        ptr[1] = 0;
-        ptr[2] = output_height;
-        ptr[3] = output_width;
-        ptr += 4;
+        Tensor* rect_tensor;
+        OP_REQUIRES_OK(context, context->allocate_output(
+                1,
+                TensorShape({int64(rects.size()), 4}),
+                &rect_tensor));
 
+        auto p_output_size = output_size_tensor->vec<int32>();
+        p_output_size(0) = output_height;
+        p_output_size(1) = output_width;
+
+        typename TTypes<float, 2>::Tensor p_rect = rect_tensor->tensor<float, 2>();
         for(size_t i=0; i<rects.size(); ++i)
         {
             auto& rect = rects[i];
-            ptr[0] = std::get<0>(rect);
-            ptr[1] = std::get<1>(rect);
-            ptr[2] = std::get<2>(rect);
-            ptr[3] = std::get<3>(rect);
-            ptr += 4;
+            p_rect(i, 0) = std::get<0>(rect);
+            p_rect(i, 1) = std::get<1>(rect);
+            p_rect(i, 2) = std::get<2>(rect);
+            p_rect(i, 3) = std::get<3>(rect);
         }
     }
 
@@ -92,7 +94,7 @@ struct MakePyramidPlan<T, 0>
             T padding,
             T& output_height,
             T& output_width,
-            std::vector<std::tuple<T, T, T, T>>& output_rects)
+            std::vector<std::tuple<float, float, float, float>>& output_rects)
     {
         output_rects.clear();
 
@@ -135,6 +137,8 @@ struct MakePyramidPlan<T, 0>
         output_height = height;
         output_width = intput_width;
 
+        float max_row_index = (float)(output_height - 1);
+        float max_col_index = (float)(output_width - 1);
 
         T y = 0;
         size_t i = 0;
@@ -143,7 +147,20 @@ struct MakePyramidPlan<T, 0>
             auto& size = pyramid[i];
             r = size.first; c = size.second;
 
-            std::tuple<T, T, T, T> rect(y, 0, r, c);
+            std::tuple<float, float, float, float> rect(
+                    (float)y / max_row_index,
+                    0.f,
+                    (float)(y+r-1) / max_row_index,
+                    (float)(c-1) / max_col_index);
+
+            /*
+            LOG(INFO)<< "(" << r << ", " << c << ") "
+                    << std::get<0>(rect) << " "
+                    << std::get<1>(rect) << " "
+                    << std::get<2>(rect) << " "
+                    << std::get<3>(rect) << " ";
+                    */
+
             output_rects.push_back(std::move(rect));
 
             y += r + padding;
@@ -162,7 +179,11 @@ struct MakePyramidPlan<T, 0>
             auto tl_x = br_x - c;
             auto tl_y = br_y - r;
 
-            std::tuple<T, T, T, T> rect(tl_y, tl_x, r, c);
+            std::tuple<float, float, float, float> rect(
+                    (float)tl_y / max_row_index,
+                    (float)tl_x / max_col_index,
+                    (float)br_y / max_row_index,
+                    (float)br_x / max_col_index);
             output_rects.push_back(rect);
             y -= r + padding;
             ++i;

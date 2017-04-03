@@ -41,7 +41,7 @@ public:
         auto scale_ = scale_tensor.flat<int32>()(0);
 
         int32 output_height, output_width;
-        std::vector<std::tuple<int32, int32, int32, int32>> output_rects;
+        std::vector<std::tuple<float, float, float, float>> output_rects;
         MakePyramidPlan<int32, 0>()(
                 (int32)_nr(input_tensor),
                 (int32)_nc(input_tensor),
@@ -59,10 +59,9 @@ public:
                 0, TensorShape({_nb(input_tensor), output_height, output_width, _nd(input_tensor)}),
                 &output_tensor));
 
-        Tensor rects_tensor;
-        OP_REQUIRES_OK(context, context->allocate_temp(
-                DataTypeToEnum<int32>::v(),
-                TensorShape({(int32)output_rects.size(), 4}),
+        Tensor* rects_tensor;
+        OP_REQUIRES_OK(context, context->allocate_output(
+                1, TensorShape({(int32)output_rects.size(), 4}),
                 &rects_tensor));
 
         Tensor indexes_tensor;
@@ -73,7 +72,7 @@ public:
 
 
         // generate rects and indexes
-        auto ptr_rects = rects_tensor.tensor<int32, 2>();
+        auto ptr_rects = rects_tensor->tensor<float, 2>();
         auto ptr_index = indexes_tensor.tensor<int32, 2>();
         auto batch = _nb(input_tensor);
         for(size_t i=0; i<output_rects.size(); ++i)
@@ -100,7 +99,7 @@ public:
         kernel::AssignImage<Device, T>()(
                  context->eigen_device<Device>(),
                  input_tensor.tensor<T, 4>(),
-                 ((const Tensor)rects_tensor).tensor<int32, 2>(),
+                 ((const Tensor*)rects_tensor)->tensor<float, 2>(),
                  ((const Tensor)indexes_tensor).tensor<int32, 2>(),
                  output_tensor->tensor<float, 4>()
         );

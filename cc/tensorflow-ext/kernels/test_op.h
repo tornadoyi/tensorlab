@@ -1,9 +1,9 @@
 //
-// Created by Jason on 06/03/2017.
+// Created by Jason on 03/04/2017.
 //
 
-#ifndef TENSORLAB_ASSIGN_IMAGE_OP_H
-#define TENSORLAB_ASSIGN_IMAGE_OP_H
+#ifndef TENSORLAB_TEST_OP_H
+#define TENSORLAB_TEST_OP_H
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/numeric_types.h"
@@ -13,7 +13,7 @@ namespace kernel
 {
 
     template <typename Device, typename T>
-    struct AssignImage {
+    struct Test {
 
         void operator()(const Device& d,
                         typename TTypes<T, 4>::ConstTensor src_data,
@@ -25,4 +25,5 @@ namespace kernel
 
 } // namespace kernel
 
-#endif //TENSORLAB_ASSIGN_IMAGE_OP_H
+
+#endif //PROJECT_TEST_OP_H

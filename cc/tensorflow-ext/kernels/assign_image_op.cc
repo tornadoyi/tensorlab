@@ -5,6 +5,7 @@
 #include "tensorflow/core/framework/register_types.h"
 #include "image_tool.h"
 #include "assign_image_op.h"
+#include "support/algorithm.h"
 
 using namespace tensorflow;
 
@@ -41,12 +42,12 @@ public:
         OP_REQUIRES(context, rects_tensor.dims() == 2 &&
                     rects_tensor.dim_size(0) == src_tensor.dim_size(0) &&
                     rects_tensor.dim_size(1) == 4,
-                    errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x 4)",
+                    errors::InvalidArgument("rects_tensor must be 2-dimensional with N x (y1 x1 y2 x2)",
                                             rects_tensor.shape().DebugString()));
 
 
         OP_REQUIRES(context, indexes_tensor.dims() == 2 && indexes_tensor.dim_size(1) == 3,
-                    errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x 4)",
+                    errors::InvalidArgument("rects_tensor must be 2-dimensional with N x 3 (idx_src idx_dst _idx_rect)",
                                             indexes_tensor.shape().DebugString()));
 
 
@@ -58,7 +59,7 @@ public:
 
         kernel::AssignImage<Device, T>()(context->eigen_device<Device>(),
                                          src_tensor.tensor<T, 4>(),
-                                         rects_tensor.tensor<int32, 2>(),
+                                         rects_tensor.tensor<float, 2>(),
                                          indexes_tensor.tensor<int32, 2>(),
                                          output->tensor<float, 4>());
 
@@ -75,9 +76,9 @@ namespace kernel
     {
         void operator()(const CPUDevice& d,
                         typename TTypes<T, 4>::ConstTensor src_data,
-                        typename TTypes<int32, 2>::ConstTensor rects,
+                        typename TTypes<float, 2>::ConstTensor rects,
                         typename TTypes<int32, 2>::ConstTensor indexes,
-                        typename TTypes<float, 4>::Tensor output_data)
+                        typename TTypes<float, 4>::Tensor output_data) try
         {
             auto b_in = _nb(src_data);
             auto b_out = _nb(output_data);
@@ -112,19 +113,35 @@ namespace kernel
                     continue;
                 }
 
+                auto st_p_y = rects(idx_rect, 0);
+                auto st_p_x = rects(idx_rect, 1);
+                auto ed_p_y = rects(idx_rect, 2);
+                auto ed_p_x = rects(idx_rect, 3);
 
-                auto st_y = rects(idx_rect, 0);
-                auto st_x = rects(idx_rect, 1);
-                auto totol_row = rects(idx_rect, 2);
-                auto totol_col = rects(idx_rect, 3);
+                auto st_y = (int32)clip(st_p_y*r_out-1, 0.f, (float)r_out-1.f);
+                auto st_x = (int32)clip(st_p_x*c_out-1, 0.f, (float)c_out-1.f);
+                auto ed_y = (int32)clip(ed_p_y*r_out-1, 0.f, (float)r_out-1.f);
+                auto ed_x = (int32)clip(ed_p_x*c_out-1, 0.f, (float)c_out-1.f);
+                auto total_row = ed_y - st_y + 1;
+                auto total_col = ed_x - st_x + 1;
 
-                float scale_r = (float)r_in / (float)totol_row;
-                float scale_c = (float)c_in / (float)totol_col;
+                if(st_y < 0 || st_y > ed_y || ed_y >= r_out ||
+                   st_x < 0 || st_x > ed_x || ed_x >= c_out)
+                {
+                    LOG(ERROR) << "out of range "
+                               << "st_y: " << st_y << " < " << "ed_y: " << ed_y << " < " << r_out
+                               << "st_x: " << st_x << " < " << "ed_x: " << ed_x << " < " << c_out;
+                    continue;
+                }
+
+
+                float scale_r = (float)r_in / (float)total_row;
+                float scale_c = (float)c_in / (float)total_col;
 
                 //LOG(INFO) << st_y << " " << st_x << " " <<totol_row << " " << totol_col;
                 //LOG(INFO) << scale_r << " " << scale_c;
 
-                for(int64 y=st_y; y < st_y+totol_row; ++y)
+                for(int64 y=st_y; y <= ed_y; ++y)
                 {
                     // map output location-y to input-y
                     auto in_y = (y-st_y) * scale_r;
@@ -132,7 +149,7 @@ namespace kernel
                     auto upper_in_y = std::min(lower_in_y + 1, r_in - 1);
                     auto lerp_in_y = in_y - lower_in_y;
 
-                    for(int64 x=st_x; x < st_x+totol_col; ++x)
+                    for(int64 x=st_x; x <= ed_x; ++x)
                     {
                         // map output location-x to input-x
                         auto in_x = (x-st_x) * scale_c;
@@ -175,7 +192,10 @@ namespace kernel
             }// for (int64 b = 0; b < batch; ++b)
 
         }
-
+        catch(std::exception& e)
+        {
+            LOG(FATAL) << e.what();
+        }
     };
 
 

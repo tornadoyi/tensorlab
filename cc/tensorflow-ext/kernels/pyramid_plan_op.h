@@ -23,7 +23,7 @@ struct MakePyramidPlan
             T padding,
             T& output_height,
             T& output_width,
-            std::vector<std::tuple<T, T, T, T>>& output_rects);
+            std::vector<std::tuple<float, float, float, float>>& output_rects);
 };
 
 

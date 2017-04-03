@@ -20,7 +20,7 @@ namespace kernel
                         typename TTypes<T, 2>::ConstTensor points,
                         typename TTypes<float, 2>::ConstTensor scales,
                         typename TTypes<int32, 2>::ConstTensor indexes,
-                        typename TTypes<float, 2>::Tensor output_data);
+                        typename TTypes<T, 2>::Tensor output_data);
 
     };
 

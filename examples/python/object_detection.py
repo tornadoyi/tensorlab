@@ -7,6 +7,7 @@ import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
 from tensorlab.framework import layers
+from tensorlab.runtime.support import rectangle_yx as rt, point_yx as pt
 from util import *
 from support import dataset
 from support.image import RandomCrop
@@ -14,28 +15,126 @@ import time
 
 def load_data(file):
     def create_rectangle(t, l, w, h):
-        p = tl.Point2f(t, l)
-        return tl.Rectanglef.create_with_tlwh(p, w, h)
+        return rt.create_with_size((t, l), (h, w))
 
     images, labels = dataset.load_object_detection_xml(file, create_rectangle)
     return images, labels
 
 
+def rect_to_tf_rect(r): return (int(r.top,), int(r.left), int(r.bottom), int(r.right))
+
+def tf_rect_to_rect(r): return tl.Rectanglef.create_with_tlwh(tl.Point2f(float(r[0]), float(r[1])), float(r[3])-float(r[1])+1, float(r[2])-float(r[0])+1)
+
+
 class Input(framework.Model):
-    def __init__(self, image_size, pyramid_scale):
+    def __init__(self, sess, image_size, pyramid_scale):
         framework.Model.__init__(self)
         self._image_size = image_size
         self._pyramid_scale = pyramid_scale
+        self._pyramid_rate = (pyramid_scale - 1.0) / pyramid_scale
+
+        self._gen_pyramid_size_and_rects(sess)
         self._gen_net()
+        self._gen_input_space_to_output_space()
+
+    @property
+    def pyamid_rects_ratio(self): return self._pyramid_rects_ratio
+
+    @property
+    def pyramid_rects(self): return self._pyramid_rects
 
 
     @property
-    def intput(self): return self._input
+    def output_size(self): return self._output_size
+
+
+    @property
+    def input(self): return self._input
+
+
+    def input_space_to_output_space(self, sess, rects, scales):
+        points = []
+        for r in rects:
+            points.append(rt.top_left(r))
+            points.append(rt.bottom_right(r))
+
+        points = np.array(points, dtype=np.int32)
+
+        resize_points = sess.run(self._input_to_output_space_tensor,
+                 feed_dict={self._input_points: points, self._input_scale: scales})
+
+        map_rects = []
+        for i in xrange(0, len(resize_points), 2):
+            rect = rt.create(resize_points[i+0], resize_points[i+1])
+            map_rects.append(rect.astype(np.int))
+
+        return map_rects
+
+
+    def debug_show(self, sess, images, labels):
+        pyramid_images = self.run(sess, feed_dict={self._input: images})[self.out]
+        scales = self._pyramid_rate ** np.arange(0, len(self._pyramid_rects_ratio), 1)
+        for i in xrange(len(labels)):
+            image = pyramid_images[i]
+            rects = labels[i]
+            map_rects = []
+            for j in xrange(len(self._pyramid_rects_ratio)):
+                if len(rects) == 0:
+                    new_rects = []
+                else:
+                    s = self._pyramid_rate ** j
+                    new_rects = self.input_space_to_output_space(sess, rects, [s]*2*len(rects))
+                map_rects.append(new_rects)
+
+
+            for r in rects:
+                y1, x1, y2, x2 = r
+                cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=5)
+
+
+            for r in self._pyramid_rects_ratio:
+                y1, x1, y2, x2 = r
+                cv2.rectangle(image, (x1, y1), (x2, y2), color=(255, 0, 0), thickness=2)
+
+            for rects in map_rects:
+                for r in rects:
+                    y1, x1, y2, x2 = r
+                    cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 0, 255), thickness=2)
+
+            cv2.imshow("image", image)
+            print("progress {0}/{1}".format(i + 1, len(pyramid_images)))
+            press_key_stop()
+
+
+    def _gen_pyramid_size_and_rects(self, sess):
+        output_size_tensor, rect_tensor = tl.image.pyramid_plan(self._image_size, self._pyramid_scale)
+        self._output_size, self._pyramid_rects_ratio, = sess.run([output_size_tensor, rect_tensor])
+        self._pyramid_rects = rt.convert_ratio_to_size(self._pyramid_rects_ratio, self._output_size, dtype=np.int32)
+
 
     def _gen_net(self):
         self._input = tf.placeholder(dtype=tf.float32, shape=(None, None, None, None))
-        self._plan_tensor = self.add(tl.image.pyramid_plan, self._image_size, self._pyramid_scale)
-        self.add(tl.image.pyramid_apply, self._input, self.out)
+        self.add(tl.image.pyramid_apply, self._input, self._output_size, self._pyramid_rects_ratio)
+
+
+
+    def _gen_input_space_to_output_space(self):
+        self._input_scale = tf.placeholder(dtype=tf.float32)
+        self._input_points = tf.placeholder(dtype=tf.int32, shape=(None, 2))
+
+        index_tensor = tf.cast(tf.log(self._input_scale ) / tf.log(float(self._pyramid_rate)) + 0.5, tf.int32)
+        index_tensor = tf.clip_by_value(index_tensor, 0, tf.shape(self._pyramid_rects_ratio)[0] - 1)
+
+        scale_tensor = self._pyramid_rate ** tf.cast(index_tensor, tf.float32)
+        scale_tensor = tf.reshape(scale_tensor, (-1, 1))
+        scale_tensor = tf.concat((scale_tensor, scale_tensor), 1)
+        order_tensor = tf.reshape(tf.range(0, tf.shape(self._input_points)[0], 1), (-1, 1))
+        order_tensor = tf.concat((order_tensor, order_tensor), 1)
+        point_resize_space_tensor = tl.image.point_to_resize_space(self._input_points, scale_tensor, order_tensor)
+
+        start_point = self._pyramid_rects[:,0:2]
+        target_start_point_tensor = tf.gather(start_point, index_tensor)
+        self._input_to_output_space_tensor =  target_start_point_tensor + point_resize_space_tensor
 
 
 
@@ -53,8 +152,10 @@ class Model(framework.Model):
     def output_shapes(self, sess, input_shape):
         return sess.run(self._output_shape_tensors, feed_dict={self._ph_input_shape: input_shape})
 
+
     def padding_values(self, sess, input_shape):
         return sess.run(self._padding_tensors, feed_dict={self._ph_input_shape: input_shape})
+
 
     def map_input_output(self, sess, input_shape, point):
         return sess.run(self._map_input_to_output_tensors,
@@ -173,27 +274,6 @@ class Model(framework.Model):
 
 
 
-def debug_images_rects(sess, images_tensor, plans, rects_list):
-    result = sess.run([images_tensor, plans])
-    images, plans = result
-    for i in xrange(len(images)):
-        img = images[i]
-
-        for p in plans[1:]:
-            y, x, h, w = p
-            cv2.rectangle(img, (x, y), (x + w - 1, y + h - 1), color=(255, 0, 0), thickness=2)
-
-        rects = rects_list[i]
-        for r in rects:
-            cv2.rectangle(img, (int(r.left), int(r.top)), (int(r.right), int(r.bottom)), color=(0, 0, 255),
-                          thickness=2)
-
-        cv2.imshow("image", img)
-        print("progress {0}/{1} rect:{2}".format(i + 1, len(images), len(rects)))
-        press_key_stop()
-
-
-
 class mmod_loss(object):
     def __init__(self,
                  model,
@@ -226,14 +306,26 @@ def main():
     crop_per_image = 30
     pyramid_scale = 6
 
+    # create session
+    sess = tf.InteractiveSession()
+
     # load train datas
     images, labels = load_data("../data/training.xml")
 
     # create crop generator
-    croper = RandomCrop(crop_size)
+    croper = RandomCrop(
+        set_chip_dims = crop_size,
+        probability_use_label = 0.5,
+        max_roatation_angle = 30,
+        translate_amount = 0.1,
+        random_scale_range = (1.3, 4),
+        probability_flip = 0.5,
+        min_rect_ratio = 0.01,
+        min_part_rect_ratio = 0.4)
+
 
     # create input layer
-    input_layer = Input(crop_size, pyramid_scale)
+    input_layer = Input(sess, crop_size, pyramid_scale)
 
     # create model
     is_training = tf.Variable(False, dtype=tf.bool)
@@ -242,12 +334,11 @@ def main():
     # create loss
     loss = mmod_loss(model, 40, 40)
 
-    # train
-    # create session
-    sess = tf.InteractiveSession()
+    # init all variables
     sess.run(tf.global_variables_initializer())
     train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     update_vars = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+
 
     '''
     #for s in model.output_shapes(sess, (150, 754, 200, 3)): print s
@@ -260,14 +351,19 @@ def main():
             print("{0} {1} {2}".format(i, j, tuple(point)))
     '''
 
+    # train
     while True:
         set_is_training = tf.assign(is_training, True)
         is_train = sess.run([set_is_training, is_training])[1]
 
+        # crop image
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
         mini_batch_samples = sess.run(mini_batch_samples)
 
-        model.run(sess, update_vars, feed_dict={input_layer.intput: mini_batch_samples})
+        # debug pyramid image
+        input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)
+
+        #model.run(sess, update_vars, feed_dict={input_layer.input: mini_batch_samples})
 
         print("once finish")
         exit()
