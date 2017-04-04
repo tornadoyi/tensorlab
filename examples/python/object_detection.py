@@ -21,10 +21,6 @@ def load_data(file):
     return images, labels
 
 
-def rect_to_tf_rect(r): return (int(r.top,), int(r.left), int(r.bottom), int(r.right))
-
-def tf_rect_to_rect(r): return tl.Rectanglef.create_with_tlwh(tl.Point2f(float(r[0]), float(r[1])), float(r[3])-float(r[1])+1, float(r[2])-float(r[0])+1)
-
 
 class Input(framework.Model):
     def __init__(self, sess, image_size, pyramid_scale):
@@ -53,22 +49,18 @@ class Input(framework.Model):
 
 
     def input_space_to_output_space(self, sess, rects, scales):
-        points = []
-        for r in rects:
-            points.append(rt.top_left(r))
-            points.append(rt.bottom_right(r))
+        assert len(rects) == len(scales)
 
-        points = np.array(points, dtype=np.int32)
+        points = rects.reshape((-1, 2))
+        pt_scales = []
+        for i in scales:
+            pt_scales.append(i)
+            pt_scales.append(i)
 
         resize_points = sess.run(self._input_to_output_space_tensor,
-                 feed_dict={self._input_points: points, self._input_scale: scales})
+                 feed_dict={self._input_points: points, self._input_scale: pt_scales})
 
-        map_rects = []
-        for i in xrange(0, len(resize_points), 2):
-            rect = rt.create(resize_points[i+0], resize_points[i+1])
-            map_rects.append(rect.astype(np.int))
-
-        return map_rects
+        return resize_points.reshape((-1, 4))
 
 
     def debug_show(self, sess, images, labels):
@@ -83,7 +75,7 @@ class Input(framework.Model):
                     new_rects = []
                 else:
                     s = self._pyramid_rate ** j
-                    new_rects = self.input_space_to_output_space(sess, rects, [s]*2*len(rects))
+                    new_rects = self.input_space_to_output_space(sess, rects, [s]*len(rects))
                 map_rects.append(new_rects)
 
 
@@ -276,6 +268,7 @@ class Model(framework.Model):
 
 class mmod_loss(object):
     def __init__(self,
+                 input,
                  model,
                  input_size,
                  detector_size,
@@ -283,6 +276,7 @@ class mmod_loss(object):
                  loss_per_missed_target = 1,
                  truth_match_iou_threshold = 0.5,):
 
+        self._input = input
         self._model = model
         self._input_size = input_size
         self._detector_size = detector_size
@@ -291,10 +285,9 @@ class mmod_loss(object):
         self._truth_match_iou_threshold = truth_match_iou_threshold
 
 
-
-
     def __call__(self, *args, **kwargs):
         pass
+
 
 
 
@@ -332,24 +325,13 @@ def main():
     model = Model(input_layer.out, is_training)
 
     # create loss
-    loss = mmod_loss(model, 40, 40)
+    loss = mmod_loss(input_layer, model, 40, 40)
 
     # init all variables
     sess.run(tf.global_variables_initializer())
     train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     update_vars = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
-
-    '''
-    #for s in model.output_shapes(sess, (150, 754, 200, 3)): print s
-    #print("="*100)
-    #for s in model.padding_values(sess, (150, 754, 200, 3)): print s
-
-    for i in xrange(100):
-        for j in xrange(100):
-            point = model.map_output_input(sess, (150, 754, 200, 3), (i,j))[-1]
-            print("{0} {1} {2}".format(i, j, tuple(point)))
-    '''
 
     # train
     while True:
@@ -361,7 +343,7 @@ def main():
         mini_batch_samples = sess.run(mini_batch_samples)
 
         # debug pyramid image
-        input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)
+        #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)
 
         #model.run(sess, update_vars, feed_dict={input_layer.input: mini_batch_samples})
 
