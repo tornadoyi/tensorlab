@@ -399,22 +399,16 @@ def main():
         min_rect_ratio = 0.01,
         min_part_rect_ratio = 0.4)
 
-    croper = RandomCrop(images, labels, crop_size,
-                        probability_use_label = 1.0,
-                        max_roatation_angle=0,
-                        translate_amount = 0,
-                        random_scale_range = (1, 1),
-                        probability_flip = 0)
-
-    crop_images, crop_rect_list = croper(sess, 1)
+    crop_images, crop_rect_list = croper(sess, 100)
     for i in xrange(len(crop_images)):
         image = crop_images[i].astype(np.uint8)
         rects = crop_rect_list[i]
         print(len(rects))
         for r in rects:
             y1, x1, y2, x2 = r
-            cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=5)
+            cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
         cv2.imshow("image", image)
+        print("progress {0}/{1}".format(i+1, len(crop_images)))
         press_key_stop()
     exit()
 

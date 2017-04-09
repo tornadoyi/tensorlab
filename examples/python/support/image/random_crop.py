@@ -42,12 +42,14 @@ class RandomCrop(object):
         indexes = np.random.uniform(0, len(self._image_list), crop_count).astype(np.int32)
         index_dict = {}
         for i in indexes:
-            i = 0 # test
+            #i = 0 # test
             if not index_dict.has_key(i):
                 index_dict[i] = 0
             index_dict[i] += 1
 
+
         input_indexes = index_dict.items()
+        #input_indexes = [(1, crop_count/2), (0, crop_count/2)] # test
 
         (crop_images, crop_rects, crop_splits) = sess.run(
             [self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor],
@@ -87,11 +89,11 @@ class RandomCrop(object):
         gen_image_count = tf.shape(self._input_gen_indexes)[0]
 
         # random crop image
-        def _random_crop(s, crop_images, crop_rects, crop_splits, cur_gen_count):
+        def _random_crop(s, crop_images, crop_rects, crop_splits, cur_rect_index):
             i = s.step
             index, count = self._input_gen_indexes[i, 0], self._input_gen_indexes[i, 1]
 
-            def _crop(crop_images, crop_rects, crop_splits, cur_gen_count):
+            def _crop(crop_images, crop_rects, crop_splits, cur_rect_index):
                 img = self._images_array.read(index)
                 image = tf.reshape(self._images_array.read(index), self._image_shapes_tensor[index])
                 rects = tf.reshape(self._labels_array.read(index), self._label_shapes_tensor[index])
@@ -106,24 +108,23 @@ class RandomCrop(object):
                 # 4 save
                 crop_images = tf.concat([crop_images, chip_images], 0)
                 crop_rects = tf.concat([crop_rects, chip_rects], 0)
-                crop_splits = tf.concat([crop_splits, rect_splits + cur_gen_count], 0)
+                crop_splits = tf.concat([crop_splits, rect_splits + cur_rect_index], 0)
+                cur_rect_index = crop_splits[-1, -1]
 
-                cur_gen_count = cur_gen_count + count
+                return crop_images, crop_rects, crop_splits, cur_rect_index
 
-
-
-                return crop_images, crop_rects, crop_splits, cur_gen_count
 
             return tf.cond(tf.equal(count, 0),
-                           lambda: (crop_images, crop_rects, crop_splits, cur_gen_count),
-                           lambda: _crop(crop_images, crop_rects, crop_splits, cur_gen_count))
+                           lambda: (crop_images, crop_rects, crop_splits, cur_rect_index),
+                           lambda: _crop(crop_images, crop_rects, crop_splits, cur_rect_index))
+
 
         crop_images = tf.constant(0, tf.float32, (0, self._chips_dims[0], self._chips_dims[1], 3))
         crop_rects = tf.constant(0, tf.int32, (0, 4))
         crop_splits = tf.constant(0, tf.int32, (0, 2))
-        cur_gen_count = tf.constant(0, tf.int32)
+        cur_rect_index = tf.constant(0, tf.int32)
         crop_images, crop_rects, crop_splits, cur_gen_count = tl.for_loop(_random_crop, 0, gen_image_count,
-                    loop_vars=[crop_images, crop_rects, crop_splits, cur_gen_count], auto_var_shape=True)
+                    loop_vars=[crop_images, crop_rects, crop_splits, cur_rect_index], auto_var_shape=True)
 
 
         # shuffle
@@ -177,7 +178,7 @@ class RandomCrop(object):
         trans_images = tf.contrib.image.transform(images, transform)
 
         # crop and resize
-        crop_image = tf.image.crop_and_resize(images, boxes=boxes, box_ind=box_ind, crop_size=self._chips_dims)
+        crop_image = tf.image.crop_and_resize(trans_images, boxes=boxes, box_ind=box_ind, crop_size=self._chips_dims)
 
         # flip
         def _flip_images(s, flip_images):
@@ -222,7 +223,7 @@ class RandomCrop(object):
 
 
                 relative_center = tf.cond(flip,
-                        lambda: tf.convert_to_tensor([reltive_scale_center[0], chip_dims[1] - reltive_scale_center[0]]),
+                        lambda: tf.convert_to_tensor([reltive_scale_center[0], chip_dims[1] - reltive_scale_center[1]]),
                         lambda: reltive_scale_center)
 
                 trans_rect = rt.centered_rect(relative_center, rt.size(rect) * scale)
@@ -311,7 +312,8 @@ class RandomCrop(object):
         angle = tf.random_uniform([], -self._max_roatation_angle, self._max_roatation_angle)
 
         def _gen_by_rect():
-            index = 0# test tf.random_uniform([], 0, rect_count, dtype=tf.int32)
+            index = tf.random_uniform([], 0, rect_count, dtype=tf.int32)
+            #index = 0 #test
             rect = rects[index]
             size = tf.minimum(rt.height(rect), rt.width(rect))
             center = rt.center(rect)
