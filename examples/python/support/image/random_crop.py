@@ -56,6 +56,7 @@ class RandomCrop(object):
             feed_dict= {self._input_gen_indexes: input_indexes})
 
         crop_rect_list = []
+ #       assert len(crop_splits) == len(crop_images)
         for i in xrange(len(crop_splits)):
             st, ed = crop_splits[i]
             crop_rect_list.append(crop_rects[st:ed])
@@ -86,7 +87,7 @@ class RandomCrop(object):
 
     def _gen_random_crop_tensor(self):
         self._input_gen_indexes = tf.placeholder(tf.int32, (None, 2))
-        gen_image_count = tf.shape(self._input_gen_indexes)[0]
+        gen_image_type_count = tf.shape(self._input_gen_indexes)[0]
 
         # random crop image
         def _random_crop(s, crop_images, crop_rects, crop_splits, cur_rect_index):
@@ -123,25 +124,42 @@ class RandomCrop(object):
         crop_rects = tf.constant(0, tf.int32, (0, 4))
         crop_splits = tf.constant(0, tf.int32, (0, 2))
         cur_rect_index = tf.constant(0, tf.int32)
-        crop_images, crop_rects, crop_splits, cur_gen_count = tl.for_loop(_random_crop, 0, gen_image_count,
+        crop_images, crop_rects, crop_splits, cur_rect_index = tl.for_loop(_random_crop, 0, gen_image_type_count,
                     loop_vars=[crop_images, crop_rects, crop_splits, cur_rect_index], auto_var_shape=True)
 
 
         # shuffle
-        '''
-        indexes = tf.random_shuffle(tf.range(0, self._input_gen_count))
+        total_crop_iamge_count = tf.shape(crop_images)[0]
+        indexes = tf.random_shuffle(tf.range(0, total_crop_iamge_count))
         crop_images = tf.gather(crop_images, indexes)
 
-        def _rect_shuffle(s, shuffle_rect_array):
+        def _rect_shuffle(s, shuffle_rects, shuffle_splits, cur_rect_index):
             i = s.step
             index = indexes[i]
-            return shuffle_rect_array.write(i, crop_rect_array.read(index))
+            split = crop_splits[index]
+            st, ed = split[0], split[1]
+            rects = crop_rects[st:ed]
+            shuffle_rects = tf.concat([shuffle_rects, crop_rects[st:ed]], 0)
 
-        shuffle_rect_array = tf.TensorArray(tf.int32, self._input_gen_count, clear_after_read=False, infer_shape=False)
-        crop_rect_array = tl.for_loop(_rect_shuffle, 0, self._input_gen_count, loop_vars=[shuffle_rect_array])
-        '''
+            last_rect_index, cur_rect_index = cur_rect_index, cur_rect_index + ed - st
+            split = tf.convert_to_tensor([[last_rect_index, cur_rect_index]])
+            shuffle_splits = tf.concat([shuffle_splits, split], 0)
 
-        self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor = crop_images, crop_rects, crop_splits
+            return shuffle_rects, shuffle_splits, cur_rect_index
+
+
+        shuffle_rects = tf.constant(0, tf.int32, (0, 4))
+        shuffle_splits = tf.constant(0, tf.int32, (0, 2))
+        cur_rect_index = tf.constant(0, tf.int32)
+        crop_rects, crop_splits, cur_rect_index = tl.for_loop(_rect_shuffle, 0, total_crop_iamge_count,
+                                      loop_vars=[shuffle_rects, shuffle_splits, cur_rect_index], auto_var_shape=True)
+
+
+        self._crop_image_tensor, \
+        self._crop_rect_tensor, \
+        self._crop_split_tensor = crop_images, crop_rects, crop_splits
+
+
 
 
     def _gen_extract_image_chip_tensor(self, image, chip_rects, flips, angles):
