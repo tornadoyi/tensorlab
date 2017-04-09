@@ -19,7 +19,7 @@ def left(r): return r[1] if len(r.shape) == 1  else r[:,1]
 
 def bottom(r): return r[2] if len(r.shape) == 1  else r[:,2]
 
-def right(r): return r[2] if len(r.shape) == 1  else r[:,3]
+def right(r): return r[3] if len(r.shape) == 1  else r[:,3]
 
 def height(r): b,t = bottom(r), top(r); return tf.maximum(b-t+1, 0)
 

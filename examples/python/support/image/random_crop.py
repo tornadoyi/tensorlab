@@ -312,6 +312,7 @@ class RandomCrop(object):
             scale_size = size * scale
             offset_center = center + rand_translate
             rand_rect = rt.centered_rect(offset_center, pt.create(scale_size, scale_size))
+
             return rand_rect
 
 

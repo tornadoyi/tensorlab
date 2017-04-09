@@ -7,8 +7,8 @@ import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
 from tensorlab.framework import layers
-from tensorlab.runtime.geometry import rectangle_yx as rt, point_yx as pt
-from tensorlab.ops.geometry import rectangle_yx as trt, point_yx as tpt
+from tensorlab.runtime.geometry import rectangle_yx as rrt, point_yx as rpt
+from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 from util import *
 from support import dataset
 from support.image import RandomCrop
@@ -16,7 +16,7 @@ import time
 
 def load_data(file):
     def create_rectangle(t, l, w, h):
-        return [t, l, h , w]
+        return [t, l, t+h-1 , l+w-1]
 
     images, labels = dataset.load_object_detection_xml(file, create_rectangle)
     return images, labels
@@ -399,11 +399,19 @@ def main():
         min_rect_ratio = 0.01,
         min_part_rect_ratio = 0.4)
 
+    croper = RandomCrop(images, labels, crop_size,
+                        probability_use_label = 1.0,
+                        max_roatation_angle=0,
+                        translate_amount = 0,
+                        random_scale_range = (1, 1),
+                        probability_flip = 0)
 
-    crop_images = croper(sess, 10)
+    crop_images = croper(sess, 100)
     for i in xrange(len(crop_images)):
         image = crop_images[i]
-        cv2.imshow("image", crop_images[i])
+        image = image.astype(np.uint8)
+        #print(image)
+        cv2.imshow("image", image)
         press_key_stop()
     exit()
 
