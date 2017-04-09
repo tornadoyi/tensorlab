@@ -406,11 +406,14 @@ def main():
                         random_scale_range = (1, 1),
                         probability_flip = 0)
 
-    crop_images = croper(sess, 100)
+    crop_images, crop_rect_list = croper(sess, 1)
     for i in xrange(len(crop_images)):
-        image = crop_images[i]
-        image = image.astype(np.uint8)
-        #print(image)
+        image = crop_images[i].astype(np.uint8)
+        rects = crop_rect_list[i]
+        print(len(rects))
+        for r in rects:
+            y1, x1, y2, x2 = r
+            cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=5)
         cv2.imshow("image", image)
         press_key_stop()
     exit()
