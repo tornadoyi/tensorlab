@@ -1,5 +1,4 @@
 
 import lib
-import image
-import test
+from ops import *
 from .tensorlab import *

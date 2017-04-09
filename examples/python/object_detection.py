@@ -7,7 +7,8 @@ import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
 from tensorlab.framework import layers
-from tensorlab.runtime.support import rectangle_yx as rt, point_yx as pt
+from tensorlab.runtime.geometry import rectangle_yx as rt, point_yx as pt
+from tensorlab.ops.geometry import rectangle_yx as trt, point_yx as tpt
 from util import *
 from support import dataset
 from support.image import RandomCrop
@@ -15,7 +16,7 @@ import time
 
 def load_data(file):
     def create_rectangle(t, l, w, h):
-        return rt.create_with_size((t, l), (h, w))
+        return [t, l, h , w]
 
     images, labels = dataset.load_object_detection_xml(file, create_rectangle)
     return images, labels
@@ -103,6 +104,9 @@ class Input(framework.Model):
         self._output_size, self._pyramid_rects_ratio, = sess.run([output_size_tensor, rect_tensor])
         self._pyramid_rects = rt.convert_ratio_to_size(self._pyramid_rects_ratio, self._output_size, dtype=np.int32)
 
+        self._pyramid_rects_tensor = tf.convert_to_tensor(self._pyramid_rects)
+        self._pyramid_rects_ratio_tensor = tf.convert_to_tensor(self._pyramid_rects_ratio)
+
 
     def _gen_net(self):
         self._input = tf.placeholder(dtype=tf.float32, shape=(None, None, None, None))
@@ -128,6 +132,51 @@ class Input(framework.Model):
         target_start_point_tensor = tf.gather(start_point, index_tensor)
         self._input_to_output_space_tensor =  target_start_point_tensor + point_resize_space_tensor
 
+
+    def _gen_output_space_to_input_space(self, rect):
+        def _nearest_rect(point):
+            def _body(i, found, idx, best_dist):
+                rect = self._pyramid_rects_tensor[i]
+
+                def _contain():
+                    found.assign(True)
+                    return i
+
+                def _not_contain():
+                    dist = self._gen_nearest_point_square_dis(rect, point)
+                    def _set_neart_point():
+                        best_dist.assign(dist)
+                        return i
+
+                    return tf.cond(dist < best_dist, _set_neart_point, lambda : idx)
+
+                temp_idx = tf.cond(trt.contains(rect, point), _contain, _not_contain)
+                idx.assign(temp_idx)
+
+                return i+1, found, idx, best_dist
+
+            best_dist = tf.Variable(sys.maxint, trainable=False)
+            idx = tf.Variable(0, trainable=False)
+            found = tf.Variable(False, trainable=False)
+            i = tf.Variable(0, dtype=tf.int32, trainable=False)
+
+            i, found, idx, best_dist = tf.while_loop(
+                lambda i, found: i < len(self._pyramid_rects) or found,
+                _body, [i, found, idx, best_dist])
+
+            return idx
+
+        index_tensor = _nearest_rect(trt.center(rect))
+        pyramid_rect = self._pyramid_rects_tensor[index_tensor]
+
+
+
+    def _gen_nearest_point_square_dis(self, rect, point):
+        temp = tf.Variable(point, dtype=point.dtype, trainable=False)
+        temp[0].assign(tf.clip_by_value(rect[0], rect[2]))
+        temp[1].assign(tf.clip_by_value(rect[1], rect[3]))
+
+        return tf.reduce_sum(tf.square(temp - point))
 
 
 
@@ -268,7 +317,7 @@ class Model(framework.Model):
 
 class mmod_loss(object):
     def __init__(self,
-                 input,
+                 input_layer,
                  model,
                  input_size,
                  detector_size,
@@ -276,7 +325,7 @@ class mmod_loss(object):
                  loss_per_missed_target = 1,
                  truth_match_iou_threshold = 0.5,):
 
-        self._input = input
+        self._input_layer = input_layer
         self._model = model
         self._input_size = input_size
         self._detector_size = detector_size
@@ -285,12 +334,45 @@ class mmod_loss(object):
         self._truth_match_iou_threshold = truth_match_iou_threshold
 
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self):
         pass
 
 
+    def _gen_loss(self, samples, labels):
+        pass
 
 
+    def _collect_all_box_from_output(self, sess, input_samples, input_labels, output_samples, adjust_threshold):
+        input_shape = input_samples.shape
+        batch, row, col, chanel = output_samples.shape
+        assert chanel == 1
+
+        def _collect(b, r, c, d):
+            score = output_samples[b, r, c, 0]
+            if score <= adjust_threshold: return
+            output_point = pt.create(r, c)
+            pramid_point = self._model.map_output_input(sess, input_shape, output_point)
+            rect = rt.centered_rect(pramid_point, self._detector_size)
+            #self._input_layer.
+
+
+        self.loop_all_images(batch, row, col, chanel, _collect)
+
+
+        for b in xrange(batch):
+            for r in xrange(row):
+                for c in xrange(col):
+                    pass
+
+
+
+
+    def loop_all_images(self, batch, row, col, chanel, call_back):
+        for b in xrange(batch):
+            for r in xrange(row):
+                for c in xrange(col):
+                    for d in xrange(chanel):
+                        call_back(b, r, c, d)
 
 
 
@@ -307,6 +389,7 @@ def main():
 
     # create crop generator
     croper = RandomCrop(
+        images, labels,
         set_chip_dims = crop_size,
         probability_use_label = 0.5,
         max_roatation_angle = 30,
@@ -316,6 +399,13 @@ def main():
         min_rect_ratio = 0.01,
         min_part_rect_ratio = 0.4)
 
+
+    crop_images = croper(sess, 10)
+    for i in xrange(len(crop_images)):
+        image = crop_images[i]
+        cv2.imshow("image", crop_images[i])
+        press_key_stop()
+    exit()
 
     # create input layer
     input_layer = Input(sess, crop_size, pyramid_scale)
@@ -335,20 +425,28 @@ def main():
 
     # train
     while True:
+        time_tag()
         set_is_training = tf.assign(is_training, True)
         is_train = sess.run([set_is_training, is_training])[1]
 
         # crop image
         mini_batch_samples, mini_batch_labels = croper(images, labels, crop_per_image)
         mini_batch_samples = sess.run(mini_batch_samples)
+        print("crop image cost {0}".format(time_tag()))
+
 
         # debug pyramid image
         #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)
 
-        #model.run(sess, update_vars, feed_dict={input_layer.input: mini_batch_samples})
+        result = model.run(sess, update_vars, feed_dict={input_layer.input: mini_batch_samples})
+        print("run model cost {0}".format(time_tag()))
 
-        print("once finish")
-        exit()
+        output = result[model.out]
+        print(output.shape)
+        print(output)
+        print("="*100)
+        #print("once finish")
+        #exit()
 
 
     sess.close()

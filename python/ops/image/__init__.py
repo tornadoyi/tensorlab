@@ -1,4 +1,4 @@
-from .. import lib
+from ... import lib
 
 
 def pyramid(*args, **kwargs): return lib.pyramid(*args, **kwargs)
