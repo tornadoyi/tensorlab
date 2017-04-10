@@ -3,7 +3,11 @@ import point_yx as pt
 
 
 def create(tl, br, dtype=None):
-    assert tl.shape == br.shape
+    assert tl.shape.ndims == br.shape.ndims
+
+    ndims = tl.shape.ndims
+    assert ndims == 1 or ndims == 2
+
     if dtype is None:
         return tf.convert_to_tensor(tf.concat([tl, br], axis=0 if len(tl.shape) == 1 else 1), dtype)
     else:

@@ -37,31 +37,43 @@ class RandomCrop(object):
         self._gen_random_crop_tensor()
 
 
+    @property
+    def output_tensors(self): return self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor
+
     def __call__(self, sess, crop_count):
 
+        feed_dict = self.gen_feed_dict(crop_count)
+
+        (crop_images, crop_rects, crop_splits) = sess.run(
+            [self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor], feed_dict)
+
+        return crop_images, self.split_rects(crop_rects, crop_splits)
+
+
+
+    def gen_feed_dict(self, crop_count):
         indexes = np.random.uniform(0, len(self._image_list), crop_count).astype(np.int32)
         index_dict = {}
         for i in indexes:
-            #i = 0 # test
+            # i = 0 # test
             if not index_dict.has_key(i):
                 index_dict[i] = 0
             index_dict[i] += 1
 
-
         input_indexes = index_dict.items()
-        #input_indexes = [(1, crop_count/2), (0, crop_count/2)] # test
+        # input_indexes = [(1, crop_count/2), (0, crop_count/2)] # test
+        feed_dict = {self._input_gen_indexes: input_indexes}
+        return feed_dict
 
-        (crop_images, crop_rects, crop_splits) = sess.run(
-            [self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor],
-            feed_dict= {self._input_gen_indexes: input_indexes})
 
-        crop_rect_list = []
- #       assert len(crop_splits) == len(crop_images)
-        for i in xrange(len(crop_splits)):
-            st, ed = crop_splits[i]
-            crop_rect_list.append(crop_rects[st:ed])
+    def split_rects(self, rects, splits):
+        rect_list = []
+        for i in xrange(len(splits)):
+            st, ed = splits[i]
+            rect_list.append(rects[st:ed])
+        return rect_list
 
-        return crop_images, crop_rect_list
+
 
 
     def _gen_init_image_rect_tensor(self):

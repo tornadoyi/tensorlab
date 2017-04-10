@@ -1,17 +1,10 @@
-
-
-import tensorflow as tf
+import cv2
 import numpy as np
+import tensorflow as tf
 import tensorlab as tl
-from tensorlab.framework import *
-from tensorlab.runtime.support import rectangle_yx as rt
-import math
+from tensorlab.runtime.geometry import rectangle_yx as rrt
 from support import dataset
-import cv
-from util import *
-import threading
-import time
-from tensorflow.python.ops import control_flow_ops
+from support.util import *
 
 images, labels = dataset.load_object_detection_xml("../data/testing.xml")
 
@@ -27,18 +20,21 @@ def test_assign_image():
     new_image = tf.image.convert_image_dtype(new_image, dtype=tf.float32)
     result = tl.image.assign_image(image, new_image, [[0.25, 0.25, 0.75, 0.75]], [[0,0,0]])
 
-    out_image = result.eval()[0]
-    cv2.imshow("image", out_image.astype(np.uint8))
+    out_image = result.eval()
+    assert out_image.shape == result.shape
+
+    cv2.imshow("image", out_image[0].astype(np.uint8))
     press_key_stop()
 
 
 def test_pyramid_plan():
     size, rects = tl.image.pyramid_plan((200, 150), 6)
+    print(size.shape, rects.shape)
     size, rects = sess.run([size, rects])
-    print(size)
+
 
     image = np.zeros(size, dtype=np.uint8)
-    rects = rt.convert_ratio_to_real(size, rects)
+    rects = rrt.convert_ratio_to_value(rects, size)
     for i in xrange(0, len(rects), 1):
         y1, x1, y2, x2 = rects[i]
         #print(y1, x1, y2, x2)
@@ -53,12 +49,17 @@ def test_pyramid_apply():
     print image.shape
     b, h, w, c = image.shape
 
+
     (size, rects) = tl.image.pyramid_plan((h, w), 6)
     out_images = tl.image.pyramid_apply(image, size, rects)
+    print(out_images.shape)
+
     size, rects, out_images = sess.run([size, rects, out_images])
 
+    print(out_images.shape)
+
     out_images = out_images.astype(np.uint8)
-    rects = rt.convert_ratio_to_real(size, rects)
+    rects = rrt.convert_ratio_to_value(rects, size)
 
     for i in xrange(b):
         img = out_images[i]
@@ -77,11 +78,18 @@ def test_pyramid_image():
     b, h, w, c = image.shape
 
     out_images, rects = tl.image.pyramid(image, 6)
+    print(out_images.shape)
+    print(rects.shape)
+
     out_images, rects = sess.run([out_images, rects])
+
+    print(out_images.shape)
+    print(rects.shape)
+
     out_images = out_images.astype(np.uint8)
 
     _, height, width, _ = out_images.shape
-    rects = rt.convert_ratio_to_real((height, width), rects)
+    rects = rrt.convert_ratio_to_value(rects, (height, width))
 
     for i in xrange(b):
         image = out_images[i]
@@ -116,12 +124,13 @@ def test_point_to_resize_space():
 
     map_points = tl.image.point_to_resize_space(points, scales, indexes)
 
+    print(map_points.shape)
 
 
 
 if __name__ == '__main__':
-    #test_assign_image()
+    # test_assign_image()
     # test_pyramid_plan()
     # test_pyramid_apply()
-    test_pyramid_image()
-    # test_point_to_resize_space()
+    # test_pyramid_image()
+     test_point_to_resize_space()

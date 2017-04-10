@@ -4,7 +4,8 @@ import cv2
 import time
 
 
-def press_key_stop():
+def press_key_stop(message = None):
+    if message is not None: print(message)
     while True:
         if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
             c = sys.stdin.read(1)
@@ -14,11 +15,6 @@ def press_key_stop():
 
 
 
-last_time = 0
-def time_tag():
-    global last_time
-    subtime = time.time() - last_time
-    last_time = time.time()
-    return subtime
+
 
 

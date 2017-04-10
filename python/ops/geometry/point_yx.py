@@ -2,10 +2,24 @@ import tensorflow as tf
 
 
 def create(y, x, dtype=None):
-    if dtype is None:
-        return tf.convert_to_tensor([y, x], dtype)
+    if dtype is not None:
+        y, x = tf.cast(y, dtype), tf.cast(x, dtype)
+
+    assert y.shape.ndims == x.shape.ndims
+    ndims = y.shape.ndims
+    assert ndims == 0 or ndims == 1
+
+    if ndims == 0:
+        return tf.convert_to_tensor([y, x])
+    elif ndims == 1:
+        y = tf.expand_dims(y, 1)
+        x = tf.expand_dims(x, 1)
+        return tf.concat([y, x], 1)
+
     else:
-        return tf.cast([y, x], dtype)
+        raise Exception("Invalid points dims ", ndims)
+
+
 
 def y(p): return p[0] if p.shape.ndims == 1 else p[:,0]
 

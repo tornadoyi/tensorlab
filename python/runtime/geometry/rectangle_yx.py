@@ -74,7 +74,7 @@ def clip_left_right(r, min, max):
     )
 
 
-def convert_ratio_to_size(rects, size, dtype=None):
+def convert_ratio_to_value(rects, size, dtype=None):
     shape = np.shape(rects)
     assert len(shape) <= 2
     w = np.array([size[0]-1, size[1]-1] * 2)
@@ -82,7 +82,7 @@ def convert_ratio_to_size(rects, size, dtype=None):
     return real.astype(np.int64) if dtype is None else real.astype(dtype)
 
 
-def convert_size_to_ratio(rects, size, dtype=None):
+def convert_value_to_ratio(rects, size, dtype=None):
     w = np.array([size[0] - 1, size[1] - 1] * 2).astype(np.float)
     real = rects / w
     return real.astype(np.float) if dtype is None else real.astype(dtype)

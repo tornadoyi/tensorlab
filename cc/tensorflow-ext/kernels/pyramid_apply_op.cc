@@ -96,9 +96,10 @@ public:
 
 
 #define REGISTER_KERNEL(T)                            \
-  REGISTER_KERNEL_BUILDER(Name("PyramidApply")      \
+  REGISTER_KERNEL_BUILDER(Name("PyramidApply")        \
                               .Device(DEVICE_CPU)     \
-                              .TypeConstraint<T>("T"), \
+                              .TypeConstraint<T>("T") \
+                              .HostMemory("size"), \
                           PyramidApplyOp<CPUDevice, T>);
 
 TF_CALL_REAL_NUMBER_TYPES(REGISTER_KERNEL);
