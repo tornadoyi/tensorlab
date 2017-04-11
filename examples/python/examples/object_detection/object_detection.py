@@ -45,21 +45,6 @@ def main(datapath):
         min_part_rect_ratio = 0.4)
 
 
-    '''
-    crop_images, crop_rect_list = croper(sess, 100)
-    for i in xrange(len(crop_images)):
-        image = crop_images[i].astype(np.uint8)
-        rects = crop_rect_list[i]
-        print(len(rects))
-        for r in rects:
-            y1, x1, y2, x2 = r
-            cv2.rectangle(image, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-        cv2.imshow("image", image)
-        print("progress {0}/{1}".format(i+1, len(crop_images)))
-        press_key_stop()
-    exit()
-    '''
-
     # create input layer
     input_layer = Input(sess, croper, crop_size, pyramid_scale)
 
@@ -83,7 +68,9 @@ def main(datapath):
         is_train = sess.run([set_is_training, is_training])[1]
 
 
-        input_layer.debug_show(sess, 100)
+        #input_layer.debug_show(sess, 100)
+        #input_layer.test_point_transform(sess)
+        input_layer.test_rect_transform(sess)
 
         # debug pyramid image
         #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)

@@ -119,6 +119,7 @@ REGISTER_OP("PointToResizeSpace")
         .Input("index: int32")
         .Output("output_image: T")
         .Attr("T: {uint8, int8, int16, int32, int64, half, float, double}")
+        .Attr("round_value: float=0")
         .SetShapeFn(shape_inference_ext::UnchangedInput0Shape);
 
 

@@ -78,6 +78,12 @@ def clip_left_right(r, min, max):
     )
 
 
+def nearest_point(r, p):
+    x = tf.clip_by_value(pt.x(p), left(r), right(r))
+    y = tf.clip_by_value(pt.y(p), top(r), bottom(r))
+    return pt.create(y, x)
+
+
 def convert_ratio_to_value(r, size, dtype=None):
     size = size - 1
     s = create(size, size)

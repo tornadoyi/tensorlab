@@ -2,8 +2,7 @@ import numpy as np
 import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
-from tensorlab.ops.geometry import rectangle_yx as rt
-import cv2
+from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 from ..support.utils import *
 
 
@@ -17,7 +16,6 @@ class Input(framework.Model):
 
         self._gen_pyramid_size_and_rects(sess)
         self._gen_net()
-
 
 
     @property
@@ -43,7 +41,7 @@ class Input(framework.Model):
             self._pyramid_rects_ratio= sess.run([output_size_tensor, pyramid_rects_tensor, pyramid_rects_ratio_tensor])
 
         # convert to tensors
-        self._pyramid_rects_tensor = tf.convert_to_tensor(self._pyramid_rects)
+        self._pyramid_rects_tensor = tf.convert_to_tensor(self._pyramid_rects, tf.int32)
         self._pyramid_rects_ratio_tensor = tf.convert_to_tensor(self._pyramid_rects_ratio)
 
 
@@ -63,7 +61,9 @@ class Input(framework.Model):
         return rt.create(output_points[0:rect_count], output_points[rect_count:2*rect_count])
 
 
+
     def _gen_point_from_input_space_to_output_space(self, points, scale):
+
         scale = tf.cast(scale, tf.float32)
         points = tf.cast(points, tf.int32)
 
@@ -75,7 +75,7 @@ class Input(framework.Model):
         target_scale = tf.concat((target_scale, target_scale), 1)   # scale_y, scale_x
         order = tf.reshape(tf.range(0, tf.shape(points)[0], 1), (-1, 1))
         order = tf.concat((order, tf.zeros([tf.shape(points)[0], 1], tf.int32)), 1)
-        resize_space_points = tl.image.point_to_resize_space(points, target_scale, order)
+        resize_space_points = tl.image.point_to_resize_space(points, target_scale, order, round_value=0.5)
 
         lr_points = rt.top_left(self._pyramid_rects_tensor)
         target_lr_points = tf.gather(lr_points, index)
@@ -83,50 +83,82 @@ class Input(framework.Model):
 
 
 
-    def _gen_output_space_to_input_space(self, rect):
-        def _nearest_rect(point):
-            def _body(i, found, idx, best_dist):
-                rect = self._pyramid_rects_tensor[i]
+    def _gen_rect_from_output_space_to_input_space(self, rects):
+        rects = tf.cast(rects, tf.int32)
+        rect_count = tf.shape(rects)[0]
+        points = rt.center(rects)
 
-                def _contain():
-                    found.assign(True)
-                    return i
 
-                def _not_contain():
-                    dist = self._gen_nearest_point_square_dis(rect, point)
-                    def _set_neart_point():
-                        best_dist.assign(dist)
-                        return i
+        indexes = self._gen_find_nearest_rects(points)
+        target_rects = tf.gather(self._pyramid_rects_tensor, indexes)
 
-                    return tf.cond(dist < best_dist, _set_neart_point, lambda : idx)
+        top_left = rt.top_left(target_rects)
+        top_left_2 = tf.tile(top_left, (1, 2))
 
-                temp_idx = tf.cond(trt.contains(rect, point), _contain, _not_contain)
-                idx.assign(temp_idx)
+        relative_rects = rects - top_left_2
+        relative_points = tf.reshape(relative_rects, [-1, 2])
 
-                return i+1, found, idx, best_dist
+        scales = 1.0 / (self._pyramid_rate ** tf.cast(indexes, tf.float32))
+        scales = tf.tile(scales, [2])
+        scales = tf.reshape(scales, (-1, 1))
+        scales = tf.concat((scales, scales), 1)
 
-            best_dist = tf.Variable(sys.maxint, trainable=False)
-            idx = tf.Variable(0, trainable=False)
-            found = tf.Variable(False, trainable=False)
-            i = tf.Variable(0, dtype=tf.int32, trainable=False)
+        order = tf.reshape(tf.range(0, rect_count*2), (-1, 1))
+        order = tf.concat([order, order], 1)
 
-            i, found, idx, best_dist = tf.while_loop(
-                lambda i, found: i < len(self._pyramid_rects) or found,
-                _body, [i, found, idx, best_dist])
-
-            return idx
-
-        index_tensor = _nearest_rect(trt.center(rect))
-        pyramid_rect = self._pyramid_rects_tensor[index_tensor]
+        resize_points = tl.image.point_to_resize_space(relative_points, scales, order, round_value=0.5)
+        return tf.reshape(resize_points, (-1 ,4))
 
 
 
-    def _gen_nearest_point_square_dis(self, rect, point):
-        temp = tf.Variable(point, dtype=point.dtype, trainable=False)
-        temp[0].assign(tf.clip_by_value(rect[0], rect[2]))
-        temp[1].assign(tf.clip_by_value(rect[1], rect[3]))
+    def _gen_point_from_output_space_to_input_space(self, points):
+        points = tf.cast(points, tf.int32)
+        point_count = tf.shape(points)[0]
 
-        return tf.reduce_sum(tf.square(temp - point))
+        indexes = self._gen_find_nearest_rects(points)
+        target_rects = tf.gather(self._pyramid_rects_tensor, indexes)
+
+
+        # scale all points
+        relative_points = points - rt.top_left(target_rects)
+
+        scales = 1.0 / (self._pyramid_rate ** tf.cast(indexes, tf.float32))
+        scales = tf.reshape(scales, (-1, 1))
+        scales = tf.concat((scales, scales), 1)
+
+        order = tf.reshape(tf.range(0, point_count), (-1, 1))
+        order = tf.concat([order, order], 1)
+
+        return tl.image.point_to_resize_space(relative_points, scales, order, round_value=0.5)
+
+
+
+    def _gen_find_nearest_rects(self, points):
+        pyramid_rects = self._pyramid_rects_tensor
+
+        rect_count = tf.shape(pyramid_rects)[0]
+        point_count = tf.shape(points)[0]
+
+        # find nearest rects
+        ymin, ymax = rt.top(pyramid_rects), rt.bottom(pyramid_rects)
+        xmin, xmax = rt.left(pyramid_rects), rt.right(pyramid_rects)
+        min = tf.concat([tf.expand_dims(ymin, 1), tf.expand_dims(xmin, 1)], axis=1)
+        max = tf.concat([tf.expand_dims(ymax, 1), tf.expand_dims(xmax, 1)], axis=1)
+        min = tf.tile(min, (point_count, 1))
+        max = tf.tile(max, (point_count, 1))
+
+        points = tf.tile(points, [1, rect_count])
+        points = tf.reshape(points, [-1, 2])
+
+        nearest_points = tf.clip_by_value(points, min, max)
+        vec = nearest_points - points
+        length_square = pt.length_square(vec)
+        length_square = tf.reshape(length_square, (point_count, -1))
+        indexes = tf.argmin(length_square, 1)
+        indexes = tf.cast(indexes, tf.int32)
+
+        return indexes
+
 
 
 
@@ -167,3 +199,73 @@ class Input(framework.Model):
             print("progress {0}/{1}".format(i + 1, len(output_images)))
             press_key_stop()
 
+
+
+    def test_rect_transform(self, sess):
+        rect_count = 5
+        idx = tf.random_uniform([], 0, len(self._pyramid_rects), tf.int32)
+
+        rect = self._pyramid_rects_tensor[idx]
+
+        t = tf.random_uniform([1, rect_count], rect[0], rect[2], tf.int32)
+        b = tf.random_uniform([1, rect_count], rect[0], rect[2], tf.int32)
+        l = tf.random_uniform([1, rect_count], rect[1], rect[3], tf.int32)
+        r = tf.random_uniform([1, rect_count], rect[1], rect[3], tf.int32)
+
+        rects = tf.transpose(tf.concat([t, l, b, r], 0))
+
+        scale = self._pyramid_rate ** tf.cast(idx, tf.float32)
+
+        resize_rects = self._gen_rect_from_output_space_to_input_space(rects)
+        origin_rects = self._gen_rect_from_input_space_to_output_space(resize_rects, scale)
+
+        for i in xrange(100):
+            rects_v, resize_rects_v, origin_rects_v, idx_v = sess.run([rects, resize_rects, origin_rects, idx ])
+
+            equal = rects_v == origin_rects_v
+            print("progress {0}/{1} idx:{2}".format(i+1, 100, idx_v))
+            if equal.all(): continue
+
+            print(rects_v)
+            print("="*100)
+            print(resize_rects_v)
+            print("=" * 100)
+            print(origin_rects_v)
+            print("=" * 100)
+
+            press_key_stop()
+
+
+
+    def test_point_transform(self, sess):
+
+        point_count = 5
+        idx = tf.random_uniform([], 0, len(self._pyramid_rects), tf.int32)
+
+        rect = self._pyramid_rects_tensor[idx]
+
+        y = tf.random_uniform([point_count], rect[0], rect[2], dtype=tf.int32)
+        x = tf.random_uniform([point_count], rect[1], rect[3], dtype=tf.int32)
+        points = pt.create(y, x)
+
+
+        scale = self._pyramid_rate ** tf.cast(idx, tf.float32)
+
+        resize_points = self._gen_point_from_output_space_to_input_space(points)
+        origin_points = self._gen_point_from_input_space_to_output_space(resize_points, scale)
+
+        for i in xrange(100):
+            points_v, resize_points_v, origin_points_v, idx_v = sess.run([points, resize_points, origin_points ,idx])
+
+            equal = points_v == origin_points_v
+            print("progress {0}/{1} idx_v:{2}".format(i+1, 100, idx_v))
+            if equal.all(): continue
+
+            print(points_v)
+            print("="*100)
+            print(resize_points_v)
+            print("=" * 100)
+            print(origin_points_v)
+            print("=" * 100)
+
+            press_key_stop()

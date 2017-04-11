@@ -24,3 +24,8 @@ def create(y, x, dtype=None):
 def y(p): return p[0] if p.shape.ndims == 1 else p[:,0]
 
 def x(p): return p[1] if p.shape.ndims == 1 else p[:,1]
+
+
+def length_square(p): return x(p) ** 2 + y(p) ** 2
+
+def length(p): return tf.sqrt(length_square(p))

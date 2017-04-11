@@ -20,7 +20,7 @@ class PointToResizeSpaceOp : public OpKernel
 public:
     explicit PointToResizeSpaceOp(OpKernelConstruction* context) : OpKernel(context)
     {
-
+        OP_REQUIRES_OK(context, context->GetAttr("round_value", &round_value_));
     }
 
     void Compute(OpKernelContext* context) override
@@ -43,7 +43,7 @@ public:
 
 
         OP_REQUIRES(context, indexes_tensor.dims() == 2 && indexes_tensor.dim_size(1) == 2,
-                    errors::InvalidArgument("rects_tensor must be 2-dimensional with (N x (point_index, scale_index))",
+                    errors::InvalidArgument("indexes_tensor must be 2-dimensional with (N x (point_index, scale_index))",
                                             indexes_tensor.shape().DebugString()));
 
 
@@ -59,9 +59,12 @@ public:
                                                 point_tensor.tensor<T, 2>(),
                                                 scale_tensor.tensor<float, 2>(),
                                                 indexes_tensor.tensor<int32, 2>(),
+                                                round_value_,
                                                 output->tensor<T, 2>());
 
     }
+
+    float round_value_;
 
 };
 
@@ -76,6 +79,7 @@ namespace kernel
                         typename TTypes<T, 2>::ConstTensor points,
                         typename TTypes<float, 2>::ConstTensor scales,
                         typename TTypes<int32, 2>::ConstTensor indexes,
+                        float round_value,
                         typename TTypes<T, 2>::Tensor output_data)
         {
             auto n_points = points.dimension(0);
@@ -108,13 +112,13 @@ namespace kernel
                 auto lower_in_y = static_cast<int64>(in_y);
                 auto upper_in_y = lower_in_y + 1;
                 auto lerp_in_y = in_y - lower_in_y;
-                auto dst_y = (T)(lower_in_y + (upper_in_y - lower_in_y) * lerp_in_y);
+                auto dst_y = (T)(lower_in_y + (upper_in_y - lower_in_y) * lerp_in_y + round_value);
 
                 auto in_x = (float)x * s_x;
                 auto lower_in_x = static_cast<int64>(in_x);
                 auto upper_in_x = lower_in_x + 1;
                 auto lerp_in_x = in_x - lower_in_x;
-                auto dst_x = (T)(lower_in_x + (upper_in_x - lower_in_x) * lerp_in_x);
+                auto dst_x = (T)(lower_in_x + (upper_in_x - lower_in_x) * lerp_in_x + round_value);
 
                 output_data(i, 0) = dst_y;
                 output_data(i, 1) = dst_x;
