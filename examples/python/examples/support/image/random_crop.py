@@ -10,6 +10,7 @@ from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 class RandomCrop(object):
 
     def __init__(self,
+                 image_list, label_list,
                  set_chip_dims,
                  probability_use_label = 1.0,
                  max_roatation_angle = 0,
@@ -19,8 +20,7 @@ class RandomCrop(object):
                  min_rect_ratio = 0.025,
                  min_part_rect_ratio = 0.5,):
 
-
-
+        self._image_list, self._label_list = image_list, label_list
         self._chips_dims = np.array(set_chip_dims)
         self._random_scale_range = random_scale_range
         self._max_roatation_angle = max_roatation_angle
@@ -30,19 +30,39 @@ class RandomCrop(object):
         self._min_rect_ratio = min_rect_ratio
         self._min_part_rect_ratio = min_part_rect_ratio
 
+        self._gen_init_image_rect_tensor()
 
-    def __call__(self, indexes): return self._gen_random_crop_tensor(indexes)
+        self._input_gen_indexes = tf.placeholder(tf.int32, [None, 2])
+        self._output_tensor = self._gen_random_crop_tensor(self._input_gen_indexes)
+
+
+    def __call__(self, sess, crop_count, split_rects=True):
+        feed_dict = self.gen_feed_dict(crop_count)
+        crop_images, crop_rects, crop_splits = sess.run(self._output_tensor, feed_dict)
+
+        if split_rects:
+            return crop_images, self.split_rects(crop_rects, crop_splits)
+        else:
+            return crop_images, crop_rects, crop_splits
+
 
 
     @property
-    def chips_dims(self): return self._chips_dims
+    def output_tensor(self): return self._output_tensor
 
 
-    def setup(self, image_list, label_list):
-        self._image_list = image_list
-        self._label_list = label_list
-        self._gen_init_image_rect_tensor()
+    def gen_feed_dict(self, crop_count):
+        indexes = np.random.uniform(0, len(self._image_list), crop_count).astype(np.int32)
+        index_dict = {}
+        for i in indexes:
+            # i = 0 # test
+            if not index_dict.has_key(i):
+                index_dict[i] = 0
+            index_dict[i] += 1
 
+        input_indexes = index_dict.items()
+        feed_dict = {self._input_gen_indexes: input_indexes}
+        return feed_dict
 
 
     def split_rects(self, rects, splits):

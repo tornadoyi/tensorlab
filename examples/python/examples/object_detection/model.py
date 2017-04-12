@@ -10,7 +10,7 @@ class Model(framework.Model):
     def __init__(self, input, is_training):
         framework.Model.__init__(self)
         self._input_layer = input
-        self._gen_net(is_training)
+        self._gen_net(input.out, is_training)
         self._gen_output_shape_tensors()
         self._gen_padding_tensors()
         self._gen_map_input_to_output_tensor()
@@ -39,7 +39,7 @@ class Model(framework.Model):
                                    self._ph_input_point: point})
 
 
-    def _gen_net(self, is_training):
+    def _gen_net(self, input, is_training):
         def weight(shape):
             initial = tf.truncated_normal(shape, stddev=0.1)
             return tf.Variable(initial)
@@ -56,7 +56,6 @@ class Model(framework.Model):
         def bn(inputs, is_traning):
             return tf.layers.batch_normalization(inputs, training=is_traning)
 
-        input, _, _ = self._input_layer.output_tensor
 
         self.add(conv2d, input, weight([5, 5, 3, 32]), bias([32]), [1, 2, 2, 1], padding="VALID")
         self.add(bn, self.out, is_training)
