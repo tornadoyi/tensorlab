@@ -67,10 +67,13 @@ def main(datapath):
         set_is_training = tf.assign(is_training, True)
         is_train = sess.run([set_is_training, is_training])[1]
 
+        #croper(sess, 150)
 
+        # test
         #input_layer.debug_show(sess, croper, 100)
         #input_layer.test_point_transform(sess)
-        input_layer.test_rect_transform(sess)
+        #input_layer.test_rect_transform(sess)
+        #model.test_map_points(sess)
 
         # debug pyramid image
         #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)

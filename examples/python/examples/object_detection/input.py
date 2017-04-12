@@ -25,7 +25,10 @@ class Input(framework.Model):
     def pyramid_rects_tensor(self): return self._pyramid_rects_tensor
 
     @property
-    def output_size_tensor(self): return self._output_size_tensor
+    def output_image_size_tensor(self): return self._output_image_size_tensor
+
+    @property
+    def output_shape_tensor(self): return self._output_shape_tensor
 
     @property
     def input_images(self): return self._input_images
@@ -34,22 +37,26 @@ class Input(framework.Model):
 
     def _gen_net(self):
 
-        input_shape_tensor = tf.shape(self._input_images)
-        image_size_tensor = input_shape_tensor[1:3]
+        self._input_shape_tensor = tf.shape(self._input_images)
+        image_size_tensor = self._input_shape_tensor[1:3]
 
         # output
-        self._output_size_tensor, \
+        self._output_image_size_tensor, \
         self._pyramid_rects_ratio_tensor = tl.image.pyramid_plan(image_size_tensor, self._pyramid_scale)
+        self._output_shape_tensor = tf.convert_to_tensor([self._input_shape_tensor[0],
+                                                  self._output_image_size_tensor[0],
+                                                  self._output_image_size_tensor[1],
+                                                  self._input_shape_tensor[3]])
 
         # pyramid rects
-        pyramid_rects_tensor = rt.convert_ratio_to_value(self._pyramid_rects_ratio_tensor, tf.cast(self._output_size_tensor, tf.float32))
+        pyramid_rects_tensor = rt.convert_ratio_to_value(self._pyramid_rects_ratio_tensor, tf.cast(self._output_image_size_tensor, tf.float32))
         self._pyramid_rects_tensor = tf.cast(pyramid_rects_tensor, tf.int32)
 
         # pyramid scales
         self._pyramid_scale_tensor = self._pyramid_rate ** tf.to_float(tf.range(0, tl.len(self._pyramid_rects_ratio_tensor), 1))
 
         # pyramid apply
-        self.add(tl.image.pyramid_apply, self._input_images, self._output_size_tensor, self._pyramid_rects_ratio_tensor)
+        self.add(tl.image.pyramid_apply, self._input_images, self._output_image_size_tensor, self._pyramid_rects_ratio_tensor)
 
 
 

@@ -1,9 +1,11 @@
+from __future__ import division
+
 import numpy as np
 import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
 from tensorlab.framework import layers
-
+from ..support.utils import *
 
 
 class Model(framework.Model):
@@ -13,30 +15,48 @@ class Model(framework.Model):
         self._gen_net(input.out, is_training)
         self._gen_output_shape_tensors()
         self._gen_padding_tensors()
-        self._gen_map_input_to_output_tensor()
-        self._gen_map_output_to_input_tensor()
 
 
     @property
     def input_layer(self): return self._input_layer
 
-    def output_shapes(self, sess, input_shape):
-        return sess.run(self._output_shape_tensors, feed_dict={self._ph_input_shape: input_shape})
+    @property
+    def output_shape_tensor(self): return self._output_shape_tensors[-1]
 
 
-    def padding_values(self, sess, input_shape):
-        return sess.run(self._padding_tensors, feed_dict={self._ph_input_shape: input_shape})
+
+    # modify dlib conv_ template
+    # int _padding_y = _stride_y!=1? 0 : _nr/2 == 1 ? 1 : 2,
+    # int _padding_x = _stride_x!=1? 0 : _nc/2 == 1 ? 1 : 2
+    def gen_map_input_to_output_tensor(self, points):
+        for i in xrange(len(self)):
+            layer = self[i]
+            if layer.core_name == "conv2d":
+                padding = self._padding_tensors[i]
+                filter = np.array(layer.core.filter[0:2], dtype=np.int32)
+                strides = np.array(layer.core.strides[1:3], dtype=np.int32)
+                points = (points + padding - tf.cast(filter / 2, tf.int32)) / strides
+                points = tf.cast(points, tf.int32)
+
+                #points = tl.Print(points, message="filter:{0} strides:{1} yx: ".format(filter, strides))
 
 
-    def map_input_output(self, sess, input_shape, point):
-        return sess.run(self._map_input_to_output_tensors,
-                        feed_dict={self._ph_input_shape: input_shape,
-                                   self._ph_input_point: point})
+        return points
 
-    def map_output_input(self, sess, input_shape, point):
-        return sess.run(self._map_output_to_input_tensors,
-                        feed_dict={self._ph_input_shape: input_shape,
-                                   self._ph_input_point: point})
+
+
+    def gen_map_output_to_input_tensor(self, points):
+        for i in xrange(len(self) - 1, -1, -1):
+            layer = self[i]
+            if layer.core_name == "conv2d":
+                padding = self._padding_tensors[i]
+                filter = np.array(layer.core.filter[0:2], dtype=np.int)
+                strides = np.array(layer.core.strides[1:3], dtype=np.int)
+                points = points * strides - padding + tf.cast(filter / 2, tf.int32)
+
+                # points = tl.Print(points, message="filter:{0} strides:{1} yx: ".format(filter, strides))
+
+        return points
 
 
     def _gen_net(self, input, is_training):
@@ -85,9 +105,8 @@ class Model(framework.Model):
 
 
     def _gen_output_shape_tensors(self):
-        self._ph_input_shape = tf.placeholder(dtype=tf.int32, shape=(4,))
         self._output_shape_tensors = []
-        input_shape = self._ph_input_shape
+        input_shape = self._input_layer.output_shape_tensor
         for layer in self:
             if layer.core_name == "conv2d":
                 input_shape = layer.core.output_shape(input_shape)
@@ -101,7 +120,7 @@ class Model(framework.Model):
         for i in xrange(len(self)):
             layer = self[i]
             if i == 0:
-                input_shape = self._ph_input_shape
+                input_shape = self._input_layer.output_shape_tensor
             else:
                 input_shape = self._output_shape_tensors[i-1]
             input_shape = input_shape[1:3]
@@ -114,34 +133,43 @@ class Model(framework.Model):
 
 
 
-    def _gen_map_input_to_output_tensor(self):
-        self._ph_input_point = tf.placeholder(dtype=tf.int32, shape=[2,])
-        self._map_input_to_output_tensors = []
-        point = tf.reverse(self._ph_input_point, [0,])
+
+    def test_map_points(self, sess):
+        # test paddings
+        conv_paddings = []
         for i in xrange(len(self)):
             layer = self[i]
             if layer.core_name == "conv2d":
                 padding = self._padding_tensors[i]
-                filter = np.array(layer.core.filter[0:2], dtype=np.int)
-                strides = np.array(layer.core.strides[1:3], dtype=np.int)
-                point = (point + padding - tf.cast(filter/2, tf.int32)) / strides
-                point = tf.cast(point, tf.int32)
-                #print(filter, strides)
+                conv_paddings.append(padding)
 
-            self._map_input_to_output_tensors.append(tf.reverse(point, [0,]))
+        images = np.zeros(shape=[150, 200, 200, 3])
 
 
+        points = []
+        for y in xrange(100):
+            for x in xrange(100):
+                points.append([y, x])
 
-    def _gen_map_output_to_input_tensor(self):
-        self._ph_input_point = tf.placeholder(dtype=tf.int32, shape=[2,])
-        self._map_output_to_input_tensors = []
-        point = tf.reverse(self._ph_input_point, [0,])
-        for i in xrange(len(self)-1, -1, -1):
-            layer = self[i]
-            if layer.core_name == "conv2d":
-                padding = self._padding_tensors[i]
-                filter = np.array(layer.core.filter[0:2], dtype=np.int)
-                strides = np.array(layer.core.strides[1:3], dtype=np.int)
-                point = point * strides - padding + tf.cast(filter/2, tf.int32)
+        points = tf.constant(points)
 
-            self._map_output_to_input_tensors.append(tf.reverse(point, [0,]))
+        if False:
+            map_points = self.gen_map_input_to_output_tensor(points)
+        else:
+            map_points = self.gen_map_output_to_input_tensor(points)
+
+
+        feches = [map_points] + conv_paddings
+        results = sess.run(feches, feed_dict={self._input_layer.input_images: images})
+
+        map_points = results[0]
+        paddings = results[1:len(feches)]
+
+        for pad in paddings:
+            print(pad)
+
+        print("="* 100)
+        for p in map_points:
+            print(tuple(p))
+
+        press_key_stop()
