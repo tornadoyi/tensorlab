@@ -14,7 +14,6 @@
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
 
-enum E_RESIZE_METHOD{BILINEAR = 0, NEAREST_NEIGHBOR, BICUBIC, AREA};
 
 template <typename Device, typename T>
 class PyramidPlanOp : public OpKernel
@@ -40,11 +39,13 @@ public:
                     errors::InvalidArgument("scale must be scalar",
                                             scale_tensor.DebugString()));
 
-        auto scale = scale_tensor.flat<T>()(0);
+
+        auto scale = (T)scale_tensor.flat<int32>()(0);
 
         auto input_size = size_tensor.vec<T>();
         T input_r = input_size(0);
         T input_c = input_size(1);
+
 
         std::vector<std::tuple<float, float, float, float>> rects;
         T output_width, output_height;
@@ -63,7 +64,7 @@ public:
                 TensorShape({int64(rects.size()), 4}),
                 &rect_tensor));
 
-        auto p_output_size = output_size_tensor->vec<int32>();
+        auto p_output_size = output_size_tensor->vec<T>();
         p_output_size(0) = output_height;
         p_output_size(1) = output_width;
 

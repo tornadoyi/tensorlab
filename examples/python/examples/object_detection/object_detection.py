@@ -34,7 +34,6 @@ def main(datapath):
 
     # create crop generator
     croper = RandomCrop(
-        images, labels,
         set_chip_dims = crop_size,
         probability_use_label = 0.5,
         max_roatation_angle = 30,
@@ -46,7 +45,7 @@ def main(datapath):
 
 
     # create input layer
-    input_layer = Input(sess, croper, crop_size, pyramid_scale)
+    input_layer = Input(sess, croper, images, labels, pyramid_scale)
 
     # create model
     is_training = tf.Variable(False, dtype=tf.bool)
@@ -68,9 +67,9 @@ def main(datapath):
         is_train = sess.run([set_is_training, is_training])[1]
 
 
-        #input_layer.debug_show(sess, 100)
+        input_layer.debug_show(sess, 100)
         #input_layer.test_point_transform(sess)
-        input_layer.test_rect_transform(sess)
+        #input_layer.test_rect_transform(sess)
 
         # debug pyramid image
         #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)

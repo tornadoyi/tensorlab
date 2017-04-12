@@ -6,14 +6,16 @@ from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 from ..support.utils import *
 
 
-class Input(framework.Model):
-    def __init__(self, sess, croper, image_size, pyramid_scale):
-        framework.Model.__init__(self)
+class Input(object):
+    def __init__(self, sess, croper, images, labels, pyramid_scale):
+
         self._croper = croper
-        self._image_size = image_size
+        self._image_size = croper.chips_dims
+        self._image_list, self._label_list = images, labels
         self._pyramid_scale = pyramid_scale
         self._pyramid_rate = (pyramid_scale - 1.0) / pyramid_scale
 
+        self._croper.setup(images, labels)
         self._gen_pyramid_size_and_rects(sess)
         self._gen_net()
 
@@ -27,6 +29,23 @@ class Input(framework.Model):
     @property
     def output_size(self): return self._output_size
 
+    @property
+    def output_tensor(self): return self._pyramid_image_tensor, self._crop_rect_tensor, self._crop_split_tensor
+
+
+    def gen_feed_dict(self, crop_count):
+        indexes = np.random.uniform(0, len(self._image_list), crop_count).astype(np.int32)
+        index_dict = {}
+        for i in indexes:
+            # i = 0 # test
+            if not index_dict.has_key(i):
+                index_dict[i] = 0
+            index_dict[i] += 1
+
+        input_indexes = index_dict.items()
+        feed_dict = {self._input_gen_indexes: input_indexes}
+        return feed_dict
+
 
 
     def _gen_pyramid_size_and_rects(self, sess):
@@ -34,6 +53,7 @@ class Input(framework.Model):
         output_size_tensor, pyramid_rects_ratio_tensor = tl.image.pyramid_plan(self._image_size, self._pyramid_scale)
         pyramid_rects_tensor = rt.convert_ratio_to_value(pyramid_rects_ratio_tensor, tf.cast(output_size_tensor, tf.float32))
         pyramid_rects_tensor = tf.cast(pyramid_rects_tensor, tf.int32)
+
 
         # run tensors
         self._output_size, \
@@ -46,8 +66,11 @@ class Input(framework.Model):
 
 
     def _gen_net(self):
-        crop_image_tensor, _, _ = self._croper.output_tensors
-        self.add(tl.image.pyramid_apply, crop_image_tensor, self._output_size, self._pyramid_rects_ratio)
+        self._input_gen_indexes = tf.placeholder(tf.int32, [None, 2])
+        self._crop_image_tensor, \
+        self._crop_rect_tensor, \
+        self._crop_split_tensor = self._croper(self._input_gen_indexes)
+        self._pyramid_image_tensor = tl.image.pyramid_apply(self._crop_image_tensor, self._output_size, self._pyramid_rects_ratio)
 
 
 
@@ -164,7 +187,7 @@ class Input(framework.Model):
 
     def debug_show(self, sess, image_count):
         # get croper output
-        crop_images, crop_rects, crop_splits = self._croper.output_tensors
+        crop_images, crop_rects, crop_splits = self._crop_image_tensor, self._crop_rect_tensor, self._crop_split_tensor
 
         # gen fetches
         scales = self._pyramid_rate ** np.arange(0, len(self._pyramid_rects_ratio), 1)
@@ -173,14 +196,14 @@ class Input(framework.Model):
             pyramid_rects = self._gen_rect_from_input_space_to_output_space(crop_rects, s)
             pyramid_rect_list.append(pyramid_rects)
 
-        fetches = [self.out, crop_splits] + pyramid_rect_list
-        results = sess.run(fetches, self._croper.gen_feed_dict(image_count))
+        fetches = list(self.output_tensor) + pyramid_rect_list
+        results = sess.run(fetches, self.gen_feed_dict(image_count))
 
         # get all results
         output_images = results[0]
-        splits = results[1]
+        splits = results[2]
         pyramid_rect_list = []
-        for i in xrange(2, len(results), 1):
+        for i in xrange(3, len(results), 1):
             rects = results[i]
             pyramid_rect_list.append(self._croper.split_rects(rects, splits))
 

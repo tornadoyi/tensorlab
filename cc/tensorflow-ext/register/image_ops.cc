@@ -94,7 +94,7 @@ REGISTER_OP("PyramidApply")
 
 REGISTER_OP("PyramidPlan")
         .Input("size: T")
-        .Input("scale: T")
+        .Input("scale: int32")
         .Output("output_size: T")
         .Output("rect: float")
         .Attr("min_size: int = 5")
