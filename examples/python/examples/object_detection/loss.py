@@ -62,7 +62,7 @@ class mmod_loss(object):
         # The loss will measure the number of incorrect detections.  A detection is
         # incorrect if it doesn't hit a truth rectangle or if it is a duplicate detection
         # on a truth rectangle.
-        grad -= tf.sparse_to_dense(truth_score_loc, score_images_shape, tf.tile([scale], [tl.len(truth_score_loc)]))
+        grad -= tf.sparse_to_dense(truth_score_loc, score_images_shape, tf.tile([scale], [tl.len(truth_score_loc)]), validate_indices=False)
 
 
         def loop_images(s, grad):
@@ -160,7 +160,7 @@ class mmod_loss(object):
             final_points = tf.gather_nd(points, final_det_indexes)
             vec_b = tf.tile([[b]], [1, tl.len(final_points)])
             indexes = tf.concat([vec_b, final_points], 1)
-            grad += tf.sparse_to_dense(indexes, score_images_shape, tf.tile([scale], [tl.len(indexes)]))
+            grad += tf.sparse_to_dense(indexes, score_images_shape, tf.tile([scale], [tl.len(indexes)]), validate_indices=False)
             return grad
 
 
@@ -194,7 +194,9 @@ class mmod_loss(object):
 
     def image_rect_to_feat_coord(self, rects):
         # scale
-        scales = tf.maximum(tf.to_float(self._detector_size) / tf.to_float(rt.size(rects)), 1.0)
+        scales = tf.to_float(self._detector_size) / tf.to_float(rt.size(rects))
+        scales = tf.maximum(scales[:, 0], scales[:, 1])
+        scales = tf.minimum(scales, 1.0)
 
         # map rect to pyramid space
         pyramid_rects = self._input_layer.gen_rect_from_input_space_to_output_space(rects, scales)
