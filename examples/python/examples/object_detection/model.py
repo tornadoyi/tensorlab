@@ -5,6 +5,7 @@ import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
 from tensorlab.framework import layers
+from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 from ..support.utils import *
 
 
@@ -42,7 +43,8 @@ class Model(framework.Model):
                 #points = tl.Print(points, message="filter:{0} strides:{1} yx: ".format(filter, strides))
 
 
-        return points
+        #return points
+        return pt.clip(points, [0, self.output_shape_tensor[1]], [0, self.output_shape_tensor[2]])
 
 
 
@@ -57,7 +59,10 @@ class Model(framework.Model):
 
                 # points = tl.Print(points, message="filter:{0} strides:{1} yx: ".format(filter, strides))
 
-        return points
+        #return points
+        input_shape = self._input_layer.input_shape
+        return pt.clip(points, [0, input_shape[1]], [0, input_shape[2]])
+
 
 
     def _gen_net(self, input, is_training):

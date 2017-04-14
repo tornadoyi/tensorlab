@@ -68,7 +68,14 @@ def contains(r, p):
     return tf.logical_not(cond)
 
 
-def clip(r, min, max): return tf.clip_by_value(r, min, max)
+def clip(r, tb_range, lr_range):
+    tb_min, tb_max = tf.split(tb_range, [1, 1])
+    lr_min, lr_max = tf.split(lr_range, [1, 1])
+    return create(
+        pt.create(tf.clip_by_value(top(r), tb_min, tb_max), tf.clip_by_value(left(r), lr_min, lr_max)),
+        pt.create(tf.clip_by_value(bottom(r), tb_min, tb_max), tf.clip_by_value(right(r), lr_min, lr_max)),
+        r.dtype
+    )
 
 
 def clip_top_bottom(r, min, max):

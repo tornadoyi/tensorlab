@@ -82,8 +82,8 @@ def main(datapath):
         # crop images
         crop_images, crop_rects, rect_groups = croper(sess, mini_batch)
 
-        loss.debug_test(sess, crop_images, crop_rects, rect_groups)
-        exit()
+        #loss.debug_test(sess, crop_images, crop_rects, rect_groups)
+        #exit()
 
         # train
         fetches = [train_step, loss.loss_tensor] + update_vars

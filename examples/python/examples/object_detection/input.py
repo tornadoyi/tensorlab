@@ -14,6 +14,7 @@ class Input(framework.Model):
         self._pyramid_rate = (pyramid_scale - 1.0) / pyramid_scale
 
         self._input_images = tf.placeholder(tf.int32, [None, None, None, None])
+        self._input_shape = tf.shape(self._input_images)
 
         self._gen_net()
 
@@ -32,6 +33,9 @@ class Input(framework.Model):
 
     @property
     def input_images(self): return self._input_images
+
+    @property
+    def input_shape(self): return self._input_shape
 
 
 

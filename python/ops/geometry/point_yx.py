@@ -25,6 +25,27 @@ def y(p): return p[0] if p.shape.ndims == 1 else p[:,0]
 
 def x(p): return p[1] if p.shape.ndims == 1 else p[:,1]
 
+def clip(p, y_range, x_range):
+    y_min, y_max = tf.split(y_range, [1, 1])
+    x_min, x_max = tf.split(x_range, [1, 1])
+    return create(
+        tf.clip_by_value(y(p), y_min, y_max),
+        tf.clip_by_value(x(p), x_min, x_max),
+    )
+
+
+def clip_y(p, min, max):
+    return create(
+        tf.clip_by_value(y(p), min, max),
+        x(p)
+    )
+
+def clip_x(p, min, max):
+    return create(
+        y(p),
+        tf.clip_by_value(x(p), min, max)
+    )
+
 
 def length_square(p): return x(p) ** 2 + y(p) ** 2
 
