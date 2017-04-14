@@ -24,6 +24,8 @@ def load_data(file):
 def main(datapath):
     crop_size = (200, 200)
     pyramid_scale = 6
+    mini_batch = 150
+    learning_rate = 1e-4
 
     # create session
     sess = tf.InteractiveSession()
@@ -55,6 +57,9 @@ def main(datapath):
     # create loss
     loss = mmod_loss(model, 40, 40)
 
+    # train
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss.loss_tensor)
+
     # init all variables
     sess.run(tf.global_variables_initializer())
     train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -67,20 +72,23 @@ def main(datapath):
         set_is_training = tf.assign(is_training, True)
         is_train = sess.run([set_is_training, is_training])[1]
 
-        #croper(sess, 150)
-
         # test
-        #input_layer.debug_show(sess, croper, 100)
+        #input_layer.debug_show(sess, croper, 150)
         #input_layer.test_point_transform(sess)
         #input_layer.test_rect_transform(sess)
         #model.test_map_points(sess)
 
-        # debug pyramid image
-        #input_layer.debug_show(sess, mini_batch_samples, mini_batch_labels)
 
-        #result = model.run(sess, update_vars, feed_dict={input_layer.input: mini_batch_samples})
-        #print("run model cost {0}".format(time_tag()))
+        # crop images
+        crop_images, crop_rects, rect_groups = croper(sess, mini_batch)
 
+        # train
+        fetches = [train_step, loss.loss_tensor] + update_vars
+        feed_dict = loss.gen_input_dict(crop_images, crop_rects, rect_groups)
+        result = sess.run(fetches, feed_dict)
+
+        v_loss = result[1]
+        print("loss: ", v_loss)
 
 
     sess.close()

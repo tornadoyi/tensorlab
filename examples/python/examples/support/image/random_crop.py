@@ -36,14 +36,20 @@ class RandomCrop(object):
         self._output_tensor = self._gen_random_crop_tensor(self._input_gen_indexes)
 
 
-    def __call__(self, sess, crop_count, split_rects=True):
+    # rect_desc: group / split
+    def __call__(self, sess, crop_count, rect_desc="group"):
         feed_dict = self.gen_feed_dict(crop_count)
         crop_images, crop_rects, crop_splits = sess.run(self._output_tensor, feed_dict)
 
-        if split_rects:
-            return crop_images, self.split_rects(crop_rects, crop_splits)
-        else:
+        if rect_desc == "split":
             return crop_images, crop_rects, crop_splits
+        else:
+            rect_group = []
+            for i in xrange(len(crop_splits)):
+                st, ed = crop_splits[i]
+                rect_group += [i] * (ed - st)
+            assert len(rect_group) == len(crop_rects)
+            return crop_images, crop_rects, np.array(rect_group)
 
 
 
@@ -67,11 +73,23 @@ class RandomCrop(object):
 
     def split_rects(self, rects, splits):
         rect_list = []
-        for i in xrange(len(splits)):
-            st, ed = splits[i]
-            rect_list.append(rects[st:ed])
-        return rect_list
 
+        dims = len(np.shape(splits))
+        if dims == 2: # splits
+            for i in xrange(len(splits)):
+                st, ed = splits[i]
+                rect_list.append(rects[st:ed])
+
+        elif dims == 1: # groups
+            len_group = splits[-1] + 1
+            for i in xrange(len_group):
+                indexes = (splits == i)
+                rect_list.append(rects[indexes])
+
+        else:
+            raise Exception("unknown split shape {0}".format(np.shape(splits)))
+
+        return rect_list
 
 
     def _gen_init_image_rect_tensor(self):

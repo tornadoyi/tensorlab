@@ -15,9 +15,22 @@ def fill(dims, value, dtype=None, name=None):
 
 
 
-def dims(v): return tf.shape(tf.shape(v))[0]
+def ndims(v): return tf.shape(tf.shape(v))[0]
 
 def dim(v, i): return tf.shape(v)[i]
 
+def dims(v):
+    n = v.shape.ndims
+    d = []
+    for i in xrange(n): d.append(dim(v, i))
+    return d
+
 
 def len(v): return dim(v, 0)
+
+def unpack(v, count):
+    n = v.shape.ndims
+    vs = []
+    for i in xrange(count): vs.append(v[i])
+    return vs
+

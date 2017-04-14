@@ -20,6 +20,7 @@ class Model(framework.Model):
     @property
     def input_layer(self): return self._input_layer
 
+
     @property
     def output_shape_tensor(self): return self._output_shape_tensors[-1]
 

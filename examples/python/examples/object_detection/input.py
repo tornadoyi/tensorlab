@@ -78,30 +78,36 @@ class Input(framework.Model):
         return tf.reshape(trans_rects, [tl.len(scales), rect_shape[0], rect_shape[1]])
 
 
-    def gen_rect_from_input_space_to_output_space(self, rects, scale):
+    def gen_rect_from_input_space_to_output_space(self, rects, scales):
         rects = tf.cast(rects, tf.int32)
         rect_count = tf.shape(rects)[0]
         tl_points = rt.top_left(rects)
         br_points = rt.bottom_right(rects)
         points = tf.concat([tl_points, br_points], 0)
-        output_points = self.gen_point_from_input_space_to_output_space(points, scale)
+        output_points = self.gen_point_from_input_space_to_output_space(points, scales)
         return rt.create(output_points[0:rect_count], output_points[rect_count:2*rect_count])
 
 
 
-    def gen_point_from_input_space_to_output_space(self, points, scale):
+    def gen_point_from_input_space_to_output_space(self, points, scales):
 
-        scale = tf.cast(scale, tf.float32)
-        points = tf.cast(points, tf.int32)
+        scales = tf.to_float(scales)
+        points = tf.to_int32(points)
 
-        index = tf.cast(tf.log(scale) / tf.log(float(self._pyramid_rate)) + 0.5, tf.int32)
+        scales = tf.reshape(scales, [-1])
+        scales = tf.tile(scales, [tl.len(points) / tl.len(scales)])
+
+
+        index = tf.to_int32(tf.log(scales) / tf.log(float(self._pyramid_rate)) + 0.5)
         index = tf.clip_by_value(index, 0, tf.shape(self._pyramid_rects_ratio_tensor)[0] - 1)
 
-        target_scale = self._pyramid_rate ** tf.cast(index, tf.float32)
+        target_scale = self._pyramid_rate ** tf.to_float(index)
         target_scale = tf.reshape(target_scale, (-1, 1))
         target_scale = tf.concat((target_scale, target_scale), 1)   # scale_y, scale_x
-        order = tf.reshape(tf.range(0, tf.shape(points)[0], 1), (-1, 1))
-        order = tf.concat((order, tf.zeros([tf.shape(points)[0], 1], tf.int32)), 1)
+
+
+        order = tf.reshape(tf.range(0, tl.len(points)), (-1, 1))
+        order = tf.concat((order, order), 1)
         resize_space_points = tl.image.point_to_resize_space(points, target_scale, order, round_value=0.5)
 
         lr_points = rt.top_left(self._pyramid_rects_tensor)
@@ -191,7 +197,7 @@ class Input(framework.Model):
 
     def debug_show(self, sess, croper, image_count):
         # get croper output
-        crop_images, crop_rects, crop_splits = croper(sess, image_count, split_rects=False)
+        crop_images, crop_rects, rect_groups = croper(sess, image_count)
 
         # gen fetches
         pyramid_rects = self.gen_rect_from_input_space_to_all_output_space(tf.constant(crop_rects))
@@ -201,11 +207,10 @@ class Input(framework.Model):
         # get all results
         output_images = results[0]
         scale_rects = results[1]
-        splits = crop_splits
 
         pyramid_rect_list = []
         for rects in scale_rects:
-            pyramid_rect_list.append(croper.split_rects(rects, splits))
+            pyramid_rect_list.append(croper.split_rects(rects, rect_groups))
 
 
         # show

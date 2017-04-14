@@ -15,7 +15,7 @@ def create(tl, br, dtype=None):
 
 def create_with_size(point, size, dtype=None): return create(point, point+size-1, dtype)
 
-def centered_rect(center, size, dtype=None): return create_with_size(center-size/2, size, dtype)
+def centered_rect(center, size, dtype=None): return create_with_size(center - (size-1)/2, size, dtype)
 
 def top(r): return r[0] if len(r.shape) == 1 else r[:,0]
 
@@ -29,7 +29,7 @@ def height(r): b,t = bottom(r), top(r); return tf.maximum(b-t+1, 0)
 
 def width(r): r,l = right(r), left(r); return tf.maximum(r-l+1, 0)
 
-def area(r): return tf.reduce_sum(width(r) * height(r))
+def area(r): return width(r) * height(r)
 
 def center(r): return pt.create(top(r)+bottom(r)+1, left(r)+right(r)+1, dtype=r.dtype) / 2
 
@@ -50,6 +50,14 @@ def intersect(r1, r2):
         pt.create(tf.maximum(top(r1), top(r2)), tf.maximum(left(r1), left(r2))),
         pt.create(tf.minimum(bottom(r1), bottom(r2)), tf.minimum(right(r1), right(r2))),
     )
+
+
+def union(r1, r2):
+    return create(
+        pt.create(tf.minimum(top(r1), top(r2)), tf.minimum(left(r1), left(r2))),
+        pt.create(tf.maximum(bottom(r1), bottom(r2)), tf.maximum(right(r1), right(r2)))
+    )
+
 
 def contains(r, p):
     cond = tf.convert_to_tensor(False)
