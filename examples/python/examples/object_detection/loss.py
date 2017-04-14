@@ -242,3 +242,14 @@ class mmod_loss(object):
         iou_s = tf.minimum(inners / outers, 1.0)
 
         return inners, outers, iou_s
+
+
+
+    def debug_test(self, sess, crop_images, crop_rects, rect_groups):
+
+        rects = tf.convert_to_tensor([[50, 50, 109, 109]], tf.int32)
+        map_rects = self.image_rect_to_feat_coord(rects)
+
+        r = sess.run(map_rects, self.gen_input_dict(crop_images, crop_rects, rect_groups))
+
+        print(r)
