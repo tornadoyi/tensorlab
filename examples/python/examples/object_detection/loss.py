@@ -190,19 +190,29 @@ class mmod_loss(object):
     def collect_valid_rects(self, images, adjust_threshold):
         # find all points > adjust_threshold
         batch_points = tf.where(tf.greater(images, adjust_threshold))
-        batch_points = tf.to_int32(batch_points)
-        scores = tf.gather_nd(images, batch_points)
-        groups, points = tf.split(batch_points, [1, -1], axis=1)
-        groups, points = tl.flatten(groups), tf.reshape(points, (-1, 2))
 
-        # map points from CNN space to pyramid space
-        pyramid_points = self._model.gen_map_output_to_input_tensor(points)
-        pyramid_rects = rt.centered_rect(pyramid_points, self._detector_size)
+        def collect(batch_points):
+            batch_points = tf.to_int32(batch_points)
+            scores = tf.gather_nd(images, batch_points)
+            groups, points = tf.split(batch_points, [1, -1], axis=1)
+            groups, points = tl.flatten(groups), tf.reshape(points, (-1, 2))
 
-        # map pyramid rects to original image space
-        rects = self._input_layer.gen_rect_from_output_space_to_input_space(pyramid_rects)
+            # map points from CNN space to pyramid space
+            pyramid_points = self._model.gen_map_output_to_input_tensor(points)
+            pyramid_rects = rt.centered_rect(pyramid_points, self._detector_size)
 
-        return scores, rects, points, groups
+            # map pyramid rects to original image space
+            rects = self._input_layer.gen_rect_from_output_space_to_input_space(pyramid_rects)
+
+            return scores, rects, points, groups
+
+        def empty():
+            return tf.constant(0, tf.float32, [0,]), \
+                   tf.constant(0, tf.int32, [0, 4]), \
+                   tf.constant(0, tf.int32, [0, 2]), \
+                   tf.constant(0, tf.int32, [0,])
+
+        return tf.cond(tf.equal(tl.len(batch_points), 0), lambda: empty(), lambda: collect(batch_points))
 
 
 
