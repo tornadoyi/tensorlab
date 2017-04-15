@@ -25,16 +25,19 @@ images, labels = dataset.load_object_detection_xml("../data/testing.xml")
 
 sess = tf.InteractiveSession()
 
-x = tf.placeholder(tf.int32, [None, None], name="x")
 
 
+def body():
+    a = tf.constant(0)
+    b = tf.constant(1)
 
-a = tf.constant([1,2,3,4,5], tf.float32)
+    a = tl.Print(a, message="a ")
+    b = tl.Print(b, message="b ")
 
-b = a + tf.sparse_to_dense([2], tf.shape(a), 0.1)
+    return tf.cond(tf.constant(True), lambda :a, lambda: b)
 
-#c = tf.sparse_tensor_to_dense(c)
+r = tf.cond(tf.constant(False), lambda : tf.constant(-1), lambda : body())
 
-r = sess.run(b)
+r = sess.run(r)
 
 print(r)

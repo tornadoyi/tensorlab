@@ -22,9 +22,9 @@ def load_data(file):
 
 
 def main(datapath):
-    crop_size = (200, 200)
+    crop_size = (100, 100)
+    mini_batch = 5
     pyramid_scale = 6
-    mini_batch = 150
     learning_rate = 1e-4
 
     # create session

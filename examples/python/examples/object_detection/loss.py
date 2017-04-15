@@ -54,7 +54,6 @@ class mmod_loss(object):
         # map rects to score points
         truth_score_points = self.image_rect_to_feat_coord(self._input_rect_tensor)
         truth_score_loc = tf.concat([input_groups, truth_score_points], 1)
-
         truth_score_loc = tl.Print(truth_score_loc, message="truth_score_loc ")
 
         # predict all possible rects
@@ -76,6 +75,8 @@ class mmod_loss(object):
             dets = tf.gather_nd(pred_rects, pred_index)
             scores = tf.gather_nd(pred_scores, pred_index)
             points = tf.gather_nd(pred_output_points, pred_index)
+
+            #dets = tl.Print(dets, [tl.len(dets)], message="dets")
 
             # The point of this loop is to fill out the truth_score_hits array.
             def gen_truth_score_hits(s, *args):
@@ -127,7 +128,7 @@ class mmod_loss(object):
                 i = s.step
                 rect = dets[i]
 
-                def do(final_dets, final_det_indexes):
+                def do(*args):
 
                     # find best matched truth
                     match_index, match_score = self.find_best_match(rect, truth)
@@ -139,13 +140,22 @@ class mmod_loss(object):
                         return final_dets, final_det_indexes
 
 
-                    return tf.cond(
-                        tl.logical_and(
-                            tf.greater(match_score, self._truth_match_iou_threshold),
-                            tf.less_equal(truth_score_hits[match_index], self._loss_per_missed_target)
-                        ),
-                        lambda : (final_dets, final_det_indexes),
-                        lambda: update(final_dets, final_det_indexes))
+                    # 1. if match_index < 0 then truth size is 0, false alarm need punishment
+                    # 2. if match_score > truth_match_iou_threshold
+                    #       - && truth_score_hits[match_index] <= loss_per_missed_target
+                    #            means that hit truth but not enough score for it, so that consider rect as missing
+                    #            rect int this condition
+                    #       - && truth_score_hits[match_index] > loss_per_missed_target
+                    #            means that hit truth
+                    # 3. else not hit any truth, false alarm need punishment
+                    return tf.cond(tf.less(match_index, 0),
+                                   lambda: update(*args),
+                                   lambda: tf.cond(tl.logical_and(
+                                       tf.greater(match_score, self._truth_match_iou_threshold),
+                                       tf.less_equal(truth_score_hits[match_index], self._loss_per_missed_target)),
+                                       lambda : args,
+                                       lambda : update(*args))
+                                   )
 
 
                 return tf.cond(self.overlaps_any_box_nms(rect, final_dets, iou_thresh=0.4), lambda: args, lambda: do(*args))
@@ -159,8 +169,10 @@ class mmod_loss(object):
 
 
             # update grad
-            final_points = tf.gather_nd(points, final_det_indexes)
-            vec_b = tf.tile([[b]], [1, tl.len(final_points)])
+            #final_det_indexes = tl.Print(final_det_indexes, [tl.len(final_det_indexes), tf.shape(final_det_indexes)], message="final_det_indexes ")
+
+            final_points = tf.gather(points, final_det_indexes)
+            vec_b = tf.tile([[b]], [tl.len(final_points), 1])
             indexes = tf.concat([vec_b, final_points], 1)
             grad += tf.sparse_to_dense(indexes, score_images_shape, tf.tile([scale], [tl.len(indexes)]), validate_indices=False)
             return grad
@@ -211,28 +223,39 @@ class mmod_loss(object):
 
 
     def overlaps_any_box_nms(self, rect, rects, iou_thresh=0.5, percent_covered_thresh=1.0):
-        rect, rects = tf.to_float(rect), tf.to_float(rects)
-        inners, outers, iou_s = self._match_rects(rect, rects)
-        index = tf.to_int32(tf.argmax(iou_s))
+        def check_overlap(rect, rects):
+            rect, rects = tf.to_float(rect), tf.to_float(rects)
+            inners, outers, iou_s = self._match_rects(rect, rects)
+            index = tf.to_int32(tf.argmax(iou_s))
 
-        iou = iou_s[index]
-        inner = inners[index]
-        max_rect = rects[index]
-        overlap = tl.logical_or(
-            tf.greater(iou, iou_thresh),
-            tf.greater(inner / rt.area(rect), percent_covered_thresh),
-            tf.greater(inner / rt.area(max_rect), percent_covered_thresh)
-        )
-        return overlap
+            iou = iou_s[index]
+            inner = inners[index]
+            max_rect = rects[index]
+            overlap = tl.logical_or(
+                tf.greater(iou, iou_thresh),
+                tf.greater(inner / rt.area(rect), percent_covered_thresh),
+                tf.greater(inner / rt.area(max_rect), percent_covered_thresh)
+            )
+            return overlap
+
+        return tf.cond(tf.equal(tl.len(rects), 0), lambda: tf.constant(False), lambda: check_overlap(rect, rects))
+
 
 
     def find_best_match(self, rect, rects):
-        rect, rects = tf.to_float(rect), tf.to_float(rects)
-        inners, outers, iou_s = self._match_rects(rect, rects)
-        max_iou_idx = tf.to_int32(tf.argmax(iou_s))
-        iou = iou_s[max_iou_idx]
 
-        return max_iou_idx, iou
+        def match(rect, rects):
+            rect, rects = tf.to_float(rect), tf.to_float(rects)
+            inners, outers, iou_s = self._match_rects(rect, rects)
+            max_iou_idx = tf.to_int32(tf.argmax(iou_s))
+            iou = iou_s[max_iou_idx]
+
+            return max_iou_idx, iou
+
+        return tf.cond(tf.equal(tl.len(rects), 0),
+                       lambda:(tf.constant(-1, tf.int32), tf.constant(0, tf.float32)),
+                       lambda: match(rect, rects))
+
 
 
     def _match_rects(self, rect, rects):
