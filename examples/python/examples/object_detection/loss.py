@@ -54,7 +54,7 @@ class mmod_loss(object):
         # map rects to score points
         truth_score_points = self.image_rect_to_feat_coord(self._input_rect_tensor)
         truth_score_loc = tf.concat([input_groups, truth_score_points], 1)
-        truth_score_loc = tl.Print(truth_score_loc, message="truth_score_loc ")
+
 
         # predict all possible rects
         pred_scores, pred_rects, pred_output_points, pred_groups = self.collect_valid_rects(score_images, -self._loss_per_false_alarm)

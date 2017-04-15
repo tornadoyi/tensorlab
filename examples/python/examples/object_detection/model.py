@@ -44,7 +44,7 @@ class Model(framework.Model):
 
 
         #return points
-        return pt.clip(points, [0, self.output_shape_tensor[1]], [0, self.output_shape_tensor[2]])
+        return pt.clip(points, (0, self.output_shape_tensor[1]-1), (0, self.output_shape_tensor[2]-1))
 
 
 
@@ -61,7 +61,7 @@ class Model(framework.Model):
 
         #return points
         input_shape = self._input_layer.input_shape
-        return pt.clip(points, [0, input_shape[1]], [0, input_shape[2]])
+        return pt.clip(points, (0, input_shape[1]-1), (0, input_shape[2]-1))
 
 
 
