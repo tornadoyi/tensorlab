@@ -58,7 +58,9 @@ def main(datapath):
     loss = mmod_loss(model, 40, 40)
 
     # train
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss.loss_tensor)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    gradients = optimizer.compute_gradients(loss.loss_tensor)
+    train_step = optimizer.apply_gradients(gradients)
 
     # init all variables
     sess.run(tf.global_variables_initializer())
