@@ -13,7 +13,7 @@ class Model(framework.Model):
     def __init__(self, input, is_training):
         framework.Model.__init__(self)
         self._input_layer = input
-        self._gen_net(input.out, is_training)
+        self._gen_net(input.output_tensor, is_training)
         self._gen_output_shape_tensors()
         self._gen_padding_tensors()
 

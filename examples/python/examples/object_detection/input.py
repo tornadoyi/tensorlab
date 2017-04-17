@@ -6,15 +6,19 @@ from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
 from ..support.utils import *
 
 
-class Input(framework.Model):
-    def __init__(self, sess, pyramid_scale):
-        framework.Model.__init__(self)
+class Input(object):
+    def __init__(self, sess, pyramid_scale, avg_red=122.782, avg_green=117.001, avg_blue=104.298):
+        #framework.Model.__init__(self)
 
         self._pyramid_scale = pyramid_scale
         self._pyramid_rate = (pyramid_scale - 1.0) / pyramid_scale
 
         self._input_images = tf.placeholder(tf.int32, [None, None, None, None])
         self._input_shape = tf.shape(self._input_images)
+
+        self._avg_red = avg_red
+        self._avg_green = avg_green
+        self._avg_blue = avg_blue
 
         self._gen_net()
 
@@ -37,6 +41,8 @@ class Input(framework.Model):
     @property
     def input_shape(self): return self._input_shape
 
+    @property
+    def output_tensor(self): return self._output_tensor
 
 
     def _gen_net(self):
@@ -60,7 +66,13 @@ class Input(framework.Model):
         self._pyramid_scale_tensor = self._pyramid_rate ** tf.to_float(tf.range(0, tl.len(self._pyramid_rects_ratio_tensor), 1))
 
         # pyramid apply
-        self.add(tl.image.pyramid_apply, self._input_images, self._output_image_size_tensor, self._pyramid_rects_ratio_tensor)
+        pyramid_images = tl.image.pyramid_apply(self._input_images, self._output_image_size_tensor, self._pyramid_rects_ratio_tensor)
+
+        # normalization
+        pyramid_images -= [self._avg_red, self._avg_green, self._avg_blue]
+        pyramid_images /= 256.0
+
+        self._output_tensor = pyramid_images
 
 
 
