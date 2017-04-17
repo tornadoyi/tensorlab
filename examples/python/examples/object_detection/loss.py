@@ -217,18 +217,22 @@ class mmod_loss(object):
 
 
     def image_rect_to_feat_coord(self, rects):
-        # scale
-        scales = tf.to_float(self._detector_size) / tf.to_float(rt.size(rects))
-        scales = tf.maximum(scales[:, 0], scales[:, 1])
-        scales = tf.minimum(scales, 1.0)
+        def transform_rects(rects):
+            # scale
+            scales = tf.to_float(self._detector_size) / tf.to_float(rt.size(rects))
+            scales = tf.maximum(scales[:, 0], scales[:, 1])
+            scales = tf.minimum(scales, 1.0)
 
-        # map rect to pyramid space
-        pyramid_rects = self._input_layer.gen_rect_from_input_space_to_output_space(rects, scales)
-        centers = rt.center(pyramid_rects)
+            # map rect to pyramid space
+            pyramid_rects = self._input_layer.gen_rect_from_input_space_to_output_space(rects, scales)
+            centers = rt.center(pyramid_rects)
 
-        # map point from pyramid to CNN space
-        return self._model.gen_map_input_to_output_tensor(centers)
+            # map point from pyramid to CNN space
+            return self._model.gen_map_input_to_output_tensor(centers)
 
+        return tf.cond(tf.equal(tl.len(rects), 0),
+                       lambda: tf.constant(0, rects.dtype, shape=(0, 2)),
+                       lambda: transform_rects(rects))
 
 
 
