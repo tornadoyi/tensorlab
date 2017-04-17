@@ -21,6 +21,11 @@ class Model(object):
         return self._tensors[len(self._tensors)-1].tensor
 
 
+    @property
+    def tensors(self):
+        return [t.tensor for t in self._tensors]
+
+
     def add(self, tensor_func, *args, **kwargs):
         '''
         if isinstance(tensor_func, Tensor):
