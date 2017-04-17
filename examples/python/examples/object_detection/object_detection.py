@@ -1,5 +1,6 @@
 from __future__ import division
 
+import signal
 import numpy as np
 import tensorflow as tf
 
@@ -137,4 +138,16 @@ def nan_inf_check(v):
 
 if __name__ == "__main__":
     main()
+
+    def signal_handler(signal, frame):
+        global stop_requested
+        print('You pressed Ctrl+C!')
+        stop_requested = True
+        exit()
+
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+
+
 
