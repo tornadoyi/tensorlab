@@ -181,7 +181,7 @@ class mmod_loss(object):
         grad = tl.for_loop(loop_images, 0, b, loop_vars=[grad])
 
         y_images = grad + score_images
-        self._loss_tensor = tf.nn.l2_loss(y_images - score_images) / tf.reduce_prod(score_images_shape)
+        self._loss_tensor = tf.nn.l2_loss(y_images - score_images) / tf.to_float(tf.reduce_prod(score_images_shape))
 
 
 

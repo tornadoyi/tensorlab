@@ -68,11 +68,11 @@ class Model(framework.Model):
     def _gen_net(self, input, is_training):
         def weight(shape):
             initial = tf.truncated_normal(shape, stddev=0.1)
-            return tf.Variable(initial)
+            return tf.Variable(initial, name="conv2d")
 
         def bias(shape):
             initial = tf.constant(0.1, shape=shape)
-            return tf.Variable(initial)
+            return tf.Variable(initial, name="bias")
 
         class conv2d(layers.conv2d):
             def __init__(self, x, W, b, strides, padding):

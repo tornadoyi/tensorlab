@@ -51,7 +51,7 @@ def main(datapath):
     input_layer = Input(sess, pyramid_scale)
 
     # create model
-    is_training = tf.Variable(False, dtype=tf.bool)
+    is_training = tf.Variable(False, dtype=tf.bool, trainable=False)
     model = Model(input_layer, is_training)
 
     # create loss
