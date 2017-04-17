@@ -79,6 +79,11 @@ public:
         }
 
 
+        // set output to zeros IMPORTANT !!!!
+        output_tensor->tensor<float, 4>().setZero();
+
+
+        // assign image
         kernel::AssignImage<Device, T>()(
                 context->eigen_device<Device>(),
                 input_tensor.tensor<T, 4>(),
