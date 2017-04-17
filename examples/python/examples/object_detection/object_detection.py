@@ -24,7 +24,7 @@ def load_data(file):
 
 def main(datapath):
     crop_size = (200, 200)
-    mini_batch = 5
+    mini_batch = 150
     pyramid_scale = 6
     learning_rate = 1e-4
 
@@ -70,7 +70,9 @@ def main(datapath):
 
 
     # train
+    step = 0
     while True:
+        step += 1
         TAG_TIME()
         set_is_training = tf.assign(is_training, True)
         is_train = sess.run([set_is_training, is_training])[1]
@@ -95,23 +97,26 @@ def main(datapath):
         v_loss = result[1]
         v_gradients = result[2]
 
-        nan_inf_check_list = []
+        nan_inf_check_list = [v_loss, v_gradients]
 
+
+        print("step: {0}".format(step))
         print("loss: ", v_loss)
 
-        '''
+
         for i in xrange(len(gradients)):
             grad, var = gradients[i]
             v_gard, v_var = v_gradients[i]
             print("{0} grad:({1}, {2}) var({3}, {4})".format(var.name, np.min(v_gard), np.max(v_gard), np.min(v_var), np.max(v_var)))
-        '''
+
 
 
         for v in nan_inf_check_list:
             err = np.any(np.isnan(v)) or np.any(np.isinf(v))
-            print("exist nan or inf")
+            if not err: continue
             print(v)
-            break
+            print("exist nan or inf")
+            exit()
 
         print("="*100)
 
