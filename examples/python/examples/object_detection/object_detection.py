@@ -1,5 +1,6 @@
 from __future__ import division
 
+import numpy as np
 import tensorflow as tf
 
 from input import Input
@@ -22,7 +23,7 @@ def load_data(file):
 
 
 def main(datapath):
-    crop_size = (100, 100)
+    crop_size = (200, 200)
     mini_batch = 5
     pyramid_scale = 6
     learning_rate = 1e-4
@@ -87,13 +88,32 @@ def main(datapath):
         #exit()
 
         # train
-        fetches = [train_step, loss.loss_tensor] + update_vars
+        fetches = [train_step, loss.loss_tensor, gradients] + update_vars
         feed_dict = loss.gen_input_dict(crop_images, crop_rects, rect_groups)
         result = sess.run(fetches, feed_dict)
 
         v_loss = result[1]
+        v_gradients = result[2]
+
+        nan_inf_check_list = []
+
         print("loss: ", v_loss)
 
+        '''
+        for i in xrange(len(gradients)):
+            grad, var = gradients[i]
+            v_gard, v_var = v_gradients[i]
+            print("{0} grad:({1}, {2}) var({3}, {4})".format(var.name, np.min(v_gard), np.max(v_gard), np.min(v_var), np.max(v_var)))
+        '''
+
+
+        for v in nan_inf_check_list:
+            err = np.any(np.isnan(v)) or np.any(np.isinf(v))
+            print("exist nan or inf")
+            print(v)
+            break
+
+        print("="*100)
 
     sess.close()
 
