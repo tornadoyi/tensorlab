@@ -73,11 +73,11 @@ def main(datapath):
         is_train = sess.run([set_is_training, is_training])[1]
 
         # test
-        #input_layer.debug_show(sess, croper, 150)
+        input_layer.debug_show(sess, croper, 150)
         #input_layer.test_point_transform(sess)
         #input_layer.test_rect_transform(sess)
         #model.test_map_points(sess)
-
+        exit()
 
         # crop images
         crop_images, crop_rects, rect_groups = croper(sess, mini_batch)

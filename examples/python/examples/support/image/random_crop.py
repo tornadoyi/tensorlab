@@ -93,24 +93,46 @@ class RandomCrop(object):
 
 
     def _gen_init_image_rect_tensor(self):
-        self._images_array = tf.TensorArray(tf.float32, size=len(self._image_list), clear_after_read=False, infer_shape=False)
-        self._labels_array = tf.TensorArray(tf.float32, size=len(self._label_list), clear_after_read=False, infer_shape=False)
-
-        image_shapes = np.zeros((0, 3), np.int32)
+        images, image_shapes, image_split = np.zeros((0,)), np.zeros((0, 3)), np.zeros((0, 2))
         for i in xrange(len(self._image_list)):
             img = self._image_list[i]
-            self._images_array = self._images_array.write(i, tf.cast(img, tf.float32))
+            images = np.concatenate([images, img.reshape(-1)], 0)
             image_shapes = np.concatenate([image_shapes, np.expand_dims(img.shape, 0)], 0)
 
-        label_shapes = np.zeros((0, 2), np.int32)
+            st = 0 if i == 0 else image_split[-1, -1]
+            r, c, d = img.shape
+            image_split = np.concatenate([image_split, [[st, st + r * c * d]]], 0)
+
+
+        labels, label_split = np.zeros((0, 4), np.int32), np.zeros((0, 2), np.int32)
         for i in xrange(len(self._label_list)):
-            lab = np.array(self._label_list[i], np.float32)
-            self._labels_array = self._labels_array.write(i, lab)
-            label_shapes = np.concatenate([label_shapes, np.expand_dims(lab.shape, 0)], 0)
+            lab = np.array(self._label_list[i], np.int32)
+            labels = np.concatenate([labels, lab], 0)
+            st = 0 if i == 0 else label_split[-1, -1]
+            label_split = np.concatenate([label_split, [[st, st + len(lab)]]], 0)
 
+        # tensors
+        images_tensor = tf.convert_to_tensor(images, tf.float32)
+        image_shape_tensor = tf.convert_to_tensor(image_shapes, tf.int32)
+        image_split_tensor = tf.convert_to_tensor(image_split, tf.int32)
 
-        self._image_shapes_tensor = tf.constant(image_shapes, tf.int32)
-        self._label_shapes_tensor = tf.constant(label_shapes, tf.int32)
+        labels_tensor = tf.convert_to_tensor(labels, tf.float32)
+        label_split_tensor = tf.convert_to_tensor(label_split, tf.int32)
+
+        def get_image(index):
+            shape = image_shape_tensor[index]
+            split = image_split_tensor[index]
+            st, ed = tl.unpack(split, 2)
+            image = tf.reshape(images_tensor[st:ed], shape)
+            return image
+
+        def get_labels(index):
+            split = label_split_tensor[index]
+            st, ed = tl.unpack(split, 2)
+            return labels_tensor[st:ed]
+
+        self._gen_get_image = get_image
+        self._gen_get_labels = get_labels
 
 
 
@@ -123,9 +145,8 @@ class RandomCrop(object):
             index, count = input_gen_indexes[i, 0], input_gen_indexes[i, 1]
 
             def _crop(crop_images, crop_rects, crop_splits, cur_rect_index):
-                img = self._images_array.read(index)
-                image = tf.reshape(self._images_array.read(index), self._image_shapes_tensor[index])
-                rects = tf.reshape(self._labels_array.read(index), self._label_shapes_tensor[index])
+                image = self._gen_get_image(index)
+                rects = self._gen_get_labels(index)
 
                 image_shape = tf.shape(image)
 
