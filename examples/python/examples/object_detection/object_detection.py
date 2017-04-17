@@ -24,7 +24,7 @@ def load_data(file):
 
 def main(datapath):
     crop_size = (200, 200)
-    mini_batch = 150
+    mini_batch = 1
     pyramid_scale = 6
     learning_rate = 1e-4
 
@@ -112,15 +112,27 @@ def main(datapath):
 
 
         for v in nan_inf_check_list:
-            err = np.any(np.isnan(v)) or np.any(np.isinf(v))
-            if not err: continue
-            print(v)
-            print("exist nan or inf")
-            exit()
+            if nan_inf_check(v): exit()
 
         print("="*100)
 
     sess.close()
+
+
+
+def nan_inf_check(v):
+    if type(v) == list:
+        for v_i in v:
+            if nan_inf_check(v_i): return True
+        return False
+
+    else:
+        exist = np.any(np.isnan(v)) or np.any(np.isinf(v))
+        if exist:
+            print(v)
+            print("exist nan or inf")
+            return True
+        return False
 
 
 if __name__ == "__main__":
