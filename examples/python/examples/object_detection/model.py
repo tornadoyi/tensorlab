@@ -60,7 +60,7 @@ class Model(framework.Model):
                 # points = tl.Print(points, message="filter:{0} strides:{1} yx: ".format(filter, strides))
 
         #return points
-        input_shape = self._input_layer.input_shape
+        input_shape = self._input_layer.output_shape_tensor
         return pt.clip(points, (0, input_shape[1]-1), (0, input_shape[2]-1))
 
 
