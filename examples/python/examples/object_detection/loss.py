@@ -204,6 +204,12 @@ class mmod_loss(object):
             # map pyramid rects to original image space
             rects = self._input_layer.gen_rect_from_output_space_to_input_space(pyramid_rects)
 
+            # sort by scores
+            scores, indexes = tf.nn.top_k(scores, tl.len(scores))
+            rects = tf.gather(rects, indexes)
+            points = tf.gather(points, indexes)
+            groups = tf.gather(groups, indexes)
+
             return scores, rects, points, groups
 
         def empty():
