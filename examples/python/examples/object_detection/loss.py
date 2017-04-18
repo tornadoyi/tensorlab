@@ -17,7 +17,7 @@ class mmod_loss(object):
 
         self._model = model
         self._input_layer = model.input_layer
-        self._detector_size = detector_size
+        self._detector_size = np.array(detector_size, np.int32)
         self._loss_per_false_alarm = loss_per_false_alarm
         self._loss_per_missed_target = loss_per_missed_target
         self._truth_match_iou_threshold = truth_match_iou_threshold

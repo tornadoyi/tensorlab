@@ -26,6 +26,7 @@ def load_data(file):
 def main(datapath):
     crop_size = (200, 200)
     mini_batch = 1
+    detector_size = (40, 40)
     pyramid_scale = 6
     learning_rate = 1e-4
 
@@ -57,7 +58,7 @@ def main(datapath):
     model = Model(input_layer, is_training)
 
     # create loss
-    loss = mmod_loss(model, 40, 40)
+    loss = mmod_loss(model, detector_size)
 
     # train
     optimizer = tf.train.AdamOptimizer(learning_rate)
