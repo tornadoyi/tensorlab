@@ -71,10 +71,16 @@ class mmod_loss(object):
             image = score_images[b]
             truth = tf.gather_nd(self._input_rect_tensor, tf.where(tf.equal(self._input_groups_tensor, b)))
 
+            # get dets, scroes and points at current image
             pred_index = tf.where(tf.equal(pred_groups, b))
             dets = tf.gather_nd(pred_rects, pred_index)
             scores = tf.gather_nd(pred_scores, pred_index)
             points = tf.gather_nd(pred_output_points, pred_index)
+
+            # use part of dets, scores and points
+            max_num_dets = 50 + tl.len(truth) * 5
+            num_dets = tf.minimum(max_num_dets, tl.len(dets))
+            dets, scores, points = dets[0:num_dets], scores[0:num_dets], points[0:num_dets]
 
             #dets = tl.Print(dets, [tl.len(dets)], message="dets")
 
