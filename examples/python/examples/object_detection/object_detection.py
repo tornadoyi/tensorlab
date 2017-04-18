@@ -25,10 +25,10 @@ def load_data(file):
 
 def main(datapath):
     crop_size = (200, 200)
-    mini_batch = 1
+    mini_batch = 150
     detector_size = (40, 40)
     pyramid_scale = 6
-    learning_rate = 1e-4
+    learning_rate = 1.0#1e-4
 
     # create session
     sess = tf.InteractiveSession()
@@ -61,7 +61,7 @@ def main(datapath):
     loss = mmod_loss(model, detector_size)
 
     # train
-    optimizer = tf.train.AdamOptimizer(learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     gradients = optimizer.compute_gradients(loss.loss_tensor)
     train_step = optimizer.apply_gradients(gradients)
 
