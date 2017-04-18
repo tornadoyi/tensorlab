@@ -41,23 +41,5 @@ loss = tf.nn.l2_loss(tf.to_float(y) - y_)
 
 train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
 
-epoch = tf.Variable(0, trainable=False)
-sess.run(tf.global_variables_initializer())
 
-saver = tf.train.Saver()
-for i in xrange(10):
-    mx, my = gen_samples()
-    r = sess.run([train_step, loss, w], feed_dict={x: mx, y: my})
-
-
-    print("loss", r[1])
-    print("w", r[2])
-
-    if i % 10 == 0:
-        saver.save(sess, "test.ckpt")
-
-    epoch.assign(i)
-
-
-
-print(r)
+trainer = Trainer(sess, )

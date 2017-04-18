@@ -7,3 +7,5 @@ dist/
 cmake*
 log
 cc/include
+checkpoints
+ignore
