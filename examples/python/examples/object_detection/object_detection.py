@@ -4,6 +4,8 @@ import signal
 import numpy as np
 import tensorflow as tf
 
+from tensorlab.framework.trainer import Trainer
+
 from input import Input
 from model import Model
 from loss import mmod_loss
@@ -60,7 +62,7 @@ def main(datapath):
     # create loss
     loss = mmod_loss(model, detector_size)
 
-    # train
+    # create gradients and train step
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     gradients = optimizer.compute_gradients(loss.loss_tensor)
     train_step = optimizer.apply_gradients(gradients)
@@ -71,52 +73,49 @@ def main(datapath):
     update_vars = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
 
-    # train
-    step = 0
-    while True:
-        step += 1
-        TAG_TIME()
-        set_is_training = tf.assign(is_training, True)
-        is_train = sess.run([set_is_training, is_training])[1]
+    # create trainer
+    trainer = Trainer(sess, checkpoint="checkpoints/object-detection/od.ckpt", max_save_second=60)
 
-        # test
-        #input_layer.debug_show(sess, croper, 150)
-        #input_layer.test_point_transform(sess)
-        #input_layer.test_rect_transform(sess)
-        #model.test_map_points(sess)
 
-        # crop images
+    # ready train parameters
+    # set train tag
+    tf.assign(is_training, True).eval()
+    print("set training state: {0}".format(is_training.eval()))
+
+    # set fetches, feed dict and call back
+    fetches = [train_step, loss.loss_tensor, gradients] + update_vars
+
+    def gen_feed_dict():
         crop_images, crop_rects, rect_groups = croper(sess, mini_batch)
+        return loss.gen_input_dict(crop_images, crop_rects, rect_groups)
 
-        #loss.debug_test(sess, crop_images, crop_rects, rect_groups)
-        #exit()
 
-        # train
-        fetches = [train_step, loss.loss_tensor, gradients] + update_vars
-        feed_dict = loss.gen_input_dict(crop_images, crop_rects, rect_groups)
-        result = sess.run(fetches, feed_dict)
-
+    def train_on_step(result):
         v_loss = result[1]
         v_gradients = result[2]
 
         nan_inf_check_list = [v_loss, v_gradients]
 
-
-        print("step: {0}".format(step))
+        print("epoch: {0}".format(trainer.epoch))
         print("loss: ", v_loss)
-
 
         for i in xrange(len(gradients)):
             grad, var = gradients[i]
             v_gard, v_var = v_gradients[i]
-            print("{0} grad:({1}, {2}) var({3}, {4})".format(var.name, np.min(v_gard), np.max(v_gard), np.min(v_var), np.max(v_var)))
-
-
+            print("{0} grad:({1}, {2}) var({3}, {4})".format(var.name, np.min(v_gard), np.max(v_gard), np.min(v_var),
+                                                             np.max(v_var)))
 
         for v in nan_inf_check_list:
-            if nan_inf_check(v): exit()
+            if not nan_inf_check(v): continue
+            trainer.stop()
+            break
 
-        print("="*100)
+        print("=" * 100)
+
+
+    # start train
+    trainer(fetches, gen_feed_dict, train_on_step)
+
 
     sess.close()
 

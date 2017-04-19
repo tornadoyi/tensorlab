@@ -24,6 +24,9 @@ class Trainer(object):
         # state information
         self._epoch = 0
 
+        # temp parms
+        self._training = False
+
 
     def __call__(self, fetches, feed_dict=None, epoch_call=None):
 
@@ -35,9 +38,10 @@ class Trainer(object):
 
         # temp vars
         pre_save_time = time.time()
+        self._training = True
 
         # train
-        while True:
+        while self._training:
             # epoch +1
             self._epoch += 1
 
@@ -69,6 +73,12 @@ class Trainer(object):
 
     @property
     def epoch(self): return self._epoch
+
+    @property
+    def training(self): return self._training
+
+    def stop(self): self._training = False
+
 
 
     def load_checkpoint(self):
