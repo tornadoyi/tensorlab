@@ -30,7 +30,7 @@ def main(datapath):
     mini_batch = 150
     detector_size = (40, 40)
     pyramid_scale = 6
-    learning_rate = 1.0#1e-4
+    learning_rate = 1e-6
 
     # create session
     sess = tf.InteractiveSession()
@@ -74,7 +74,10 @@ def main(datapath):
 
 
     # create trainer
-    trainer = Trainer(sess, checkpoint="checkpoints/object-detection/od.ckpt", max_save_second=60)
+    trainer = Trainer(sess,
+                      checkpoint="checkpoints/object-detection/od.ckpt",
+                      max_save_second=60,
+                      save_with_epoch=True)
 
 
     # ready train parameters

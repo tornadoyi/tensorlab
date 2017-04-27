@@ -1,9 +1,9 @@
-import tensorflow as tf
 import time
 import os
-from types import FunctionType, MethodType
 import pickle
-
+import re
+from types import FunctionType, MethodType
+import tensorflow as tf
 
 class Trainer(object):
     def __init__(self,
@@ -12,13 +12,16 @@ class Trainer(object):
                  checkpoint=None,
                  max_save_second = None,
                  max_save_epoch = None,
-                 max_epoch = None):
+                 max_epoch = None,
+                 save_with_epoch = False):
+
         self._sess = sess
         self._init_variables = init_variables
         self._checkpoint = checkpoint
         self._max_save_second = max_save_second
         self._max_save_epoch = max_save_epoch
         self._max_epoch = max_epoch
+        self._save_with_epoch = save_with_epoch
         self._saver = tf.train.Saver()
 
         # state information
@@ -26,6 +29,10 @@ class Trainer(object):
 
         # temp parms
         self._training = False
+        self._rex_steps = None
+        if self._checkpoint is not None:
+            ex = "^{0}-(\d*)\.".format(os.path.basename(self._checkpoint))
+            self._rex_steps = re.compile(ex)
 
 
     def __call__(self, fetches, feed_dict=None, epoch_call=None):
@@ -104,7 +111,9 @@ class Trainer(object):
             state_file_path = self._checkpoint + ".state"
             with open(state_file_path) as f:
                 state = pickle.loads(f.read())
-                self._epoch = state["epoch"]
+                file_max_epoch = self.find_max_epoch()
+                history_max_epoch = state["epoch"]
+                self._epoch = history_max_epoch if file_max_epoch < 0 else min(history_max_epoch, file_max_epoch)
         except Exception, e:
             print(e)
 
@@ -116,7 +125,8 @@ class Trainer(object):
 
         try:
             # save checkpoint
-            self._saver.save(self._sess, self._checkpoint)
+            global_step = self._epoch if self._save_with_epoch else None
+            self._saver.save(self._sess, self._checkpoint, global_step=global_step)
 
             # save state
             state = {
@@ -128,3 +138,20 @@ class Trainer(object):
 
         except Exception,e:
             print(e)
+
+
+    def find_max_epoch(self):
+        max_epoch = -1
+        dirname = os.path.dirname(self._checkpoint)
+        if not os.path.isdir(dirname):return max_epoch
+        if self._rex_steps is None: return max_epoch
+
+        for fname in os.listdir(dirname):
+            steps = re.findall(self._rex_steps, fname)
+            if len(steps) == 0: continue
+            epoch = int(steps[0])
+            max_epoch = min(max_epoch, epoch)
+
+        return max_epoch
+
+
