@@ -1,7 +1,5 @@
 import tensorflow as tf
 
-epsilon = 2.2204460492503131e-16
-
 def check_tensor(*args):
     list = []
     for v in args:

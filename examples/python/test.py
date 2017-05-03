@@ -25,34 +25,69 @@ images, labels = dataset.load_object_detection_xml("../data/testing.xml")
 
 sess = tf.InteractiveSession()
 
-gloabl_i = 1
-def gen_samples():
-    global gloabl_i
-    w = np.array([4,3,2,1], np.float32)
-    x = np.array([1,1,1,1]) * gloabl_i#np.random.randint(0, 10, size=4)
-    y = w * x
-    return x, y
+v = tf.Variable(0.0)
+v1 = tf.Variable(0.0)
+op_v = v.assign_add(1.0)
+loss = (1.0 - v * 3.0) ** 2.0
 
-x = tf.placeholder(tf.int32, [None, ])
-y = tf.placeholder(tf.int32, [None, ])
+loss1 = (2.0 - v1 * 4.0) ** 2.0
 
-w = tf.Variable([1,2,3,4], dtype=tf.float32, name="vv")
-y_ = w * tf.to_float(x)
+with tf.variable_scope("optimizer"):
+    optimizer = tf.train.RMSPropOptimizer(0.1)
 
-loss = tf.nn.l2_loss(tf.to_float(y) - y_)
+with tf.variable_scope("train_step"):
+    train_step = optimizer.minimize(loss)
 
-train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+with tf.variable_scope("train_step2"):
+    train_step2 = optimizer.minimize(loss1)
 
-def gen_feed_dict():
-    sx, sy = gen_samples()
-    return {x: sx, y:sy}
+slot_names = optimizer.get_slot_names()
 
-trainer = Trainer(sess, checkpoint="checkpoint/test/test.ckpt", max_epoch=10, max_save_epoch=5)
+vs = []
+for name in slot_names:
+    vs.append(optimizer.get_slot(v, name))
 
+vs1 = []
+for name in slot_names:
+    vs1.append(optimizer.get_slot(v1, name))
+
+for p in vs: print(p)
+print("*"*100)
+for p in vs1: print(p)
+
+train_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) #+ tf.get_collection(tf.GraphKeys.SAVEABLE_OBJECTS)
+
+print(vs[0] == vs1[0])
+print(vs[1] == vs1[1])
+
+sess.run(tf.global_variables_initializer())
+
+
+
+
+
+
+saver = tf.train.Saver(train_vars)
+
+
+trainer = Trainer(sess, saver, checkpoint="checkpoints/test/test.ckpt", max_epoch=5, max_save_epoch=1, save_with_epoch=True)
+
+for v in train_vars:
+    print(v.name, v.eval())
+
+print("="*100)
 
 def step_call_back(r):
-    print(trainer.epoch)
-    print("loss", r[1])
+    for v in train_vars:
+        print(v.name, v.eval())
+
+    print("="*100)
 
 
-trainer([train_step, loss], gen_feed_dict, step_call_back)
+trainer(train_step, epoch_callback=step_call_back)
+
+
+for v in train_vars:
+    print(v.name, v.eval())
+
+print("="*100)
