@@ -4,7 +4,7 @@ import numpy as np
 from collections import namedtuple
 import tensorflow as tf
 import tensorlab as tl
-from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
+from tensorlab.python.ops.geometry import rectangle_yx as rt, point_yx as pt
 
 
 class RandomCrop(object):

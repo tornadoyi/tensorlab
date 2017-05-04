@@ -27,11 +27,12 @@ FULLVERSION = VERSION
 
 setup(name='tensorlab',
     version=VERSION,
-    description="extension for python grammar",
+    description="extension of tensorflow",
     #long_description=open('README.md').read(),
     author='yi gu',
     author_email='390512308@qq.com',
     license='License :: OSI Approved :: Apache Software License',
+    install_requires = ['tensorflow>=1.0'],
     packages=find_packages(),
     #package_dir={'': 'tensorlab'},
     package_data={'tensorlab': ['*.so']},

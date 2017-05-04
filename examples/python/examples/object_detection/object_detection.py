@@ -4,7 +4,7 @@ import signal
 import numpy as np
 import tensorflow as tf
 
-from tensorlab.framework.trainer import Trainer
+from tensorlab.python.framework.trainer import Trainer
 
 from input import Input
 from model import Model

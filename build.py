@@ -37,21 +37,21 @@ def build_py():
     os.chdir(BUILD_PY_PATH)
 
     # copy python path
-    shutil.copytree(os.path.join(ROOT_PATH, "python"), os.path.join(BUILD_PY_PATH, "tensorlab"))
+    shutil.copytree(os.path.join(ROOT_PATH, "tensorlab"), os.path.join(BUILD_PY_PATH, "tensorlab"))
 
     # copy setup file
     shutil.copy(os.path.join(ROOT_PATH, "setup.py"), BUILD_PY_PATH)
 
     # copy lib
-    lib_path = os.path.join(BUILD_CC_PATH, "cc/tensorflow-ext/libtensorflow-ext.so")
+    lib_path = os.path.join(BUILD_CC_PATH, "tensorlab/cc/tensorflow-ext/libtensorflow-ext.so")
     if not os.path.isfile(lib_path):
-        print("{0} not exist".format(lib_path))
+        raise Exception("{0} not exist".format(lib_path))
     else:
         shutil.copy(lib_path, "tensorlab")
 
-    lib_path = os.path.join(BUILD_CC_PATH, "cc/tensorlab/libtensorlab.so")
+    lib_path = os.path.join(BUILD_CC_PATH, "tensorlab/cc/tensorlab/libtensorlab.so")
     if not os.path.isfile(lib_path):
-        print("{0} not exist".format(lib_path))
+        raise Exception("{0} not exist".format(lib_path))
     else:
         shutil.copyfile(lib_path, "tensorlab/tensorlab.so")
 

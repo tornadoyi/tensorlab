@@ -4,8 +4,8 @@ import numpy as np
 import tensorflow as tf
 import tensorlab as tl
 from tensorlab import framework
-from tensorlab.framework import layers
-from tensorlab.ops.geometry import rectangle_yx as rt, point_yx as pt
+from tensorlab.python.framework import layers
+from tensorlab.python.ops.geometry import rectangle_yx as rt, point_yx as pt
 from ..support.utils import *
 
 
