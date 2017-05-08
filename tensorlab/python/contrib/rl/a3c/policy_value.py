@@ -89,21 +89,21 @@ class NormalDistributionPolicy(DistributionPolicy):
 
 
 class MultiPolicy(Policy):
-    def __init__(self, polices, num_actions, *args, **kwargs):
+    def __init__(self, polices, action_split_funcs = None, *args, **kwargs):
         super(MultiPolicy, self).__init__(*args, **kwargs)
         self._polices = polices
-        self._num_actions = num_actions
+        self._action_split_funcs = action_split_funcs
 
-        assert len(polices) > 0 and len(polices) == len(num_actions)
+        assert len(polices) > 0
+        if action_split_funcs is not None: assert len(action_split_funcs) == len(polices)
 
 
     def build(self, input_states, input_actions, *args, **kwargs):
-        st = 0
+
         for i in xrange(len(self._polices)):
             p = self._polices[i]
-            n = self._num_actions[i]
-            ed = st + n
-            p.build(input_states, input_actions[:,st:ed], *args, **kwargs)
+            action = input_actions if self._action_split_funcs is None else self._action_split_funcs[i](input_actions)
+            p.build(input_states, action, *args, **kwargs)
 
             self._pi = p.pi if i == 0 else tf.concat([self._pi, p.pi], axis=array_ops.dim(p.pi, -1)-1)
             self._log_pi = p.log_pi if i == 0 else tf.concat([self._log_pi, p.log_pi], axis=array_ops.dim(p.log_pi, -1)-1)
@@ -115,7 +115,6 @@ class MultiPolicy(Policy):
             self._predict_action_probs = p.predict_action_probs if i == 0 else \
                 tf.concat([self._predict_action_probs, p.predict_action_probs], axis=array_ops.dim(p.predict_action_probs, -1)-1)
 
-            st = ed
 
 
 
