@@ -6,13 +6,14 @@ from types import FunctionType, MethodType
 import tensorflow as tf
 import numpy as np
 import thread
+from archive import Archive
 
 class TrainerBase(object):
     def __init__(self,
                  sess,
-                 saver = None,
                  init_variables=True,
                  checkpoint=None,
+                 archive=None,
                  max_save_second = None,
                  max_save_epoch = None,
                  max_epoch = None,
@@ -25,7 +26,7 @@ class TrainerBase(object):
         self._max_save_epoch = max_save_epoch
         self._max_epoch = max_epoch
         self._save_with_epoch = save_with_epoch
-        self._saver = saver if saver is not None else tf.train.Saver()
+        self._archive = archive if archive is not None else Archive()
         self._lock = thread.allocate_lock()
 
         # state information
@@ -102,65 +103,14 @@ class TrainerBase(object):
 
     def _load_checkpoint(self):
         if self._checkpoint is None: return
-
-        # check dir valid
-        filename, epoch = self._lastest_checkpoint()
-        if filename is None: return
-
-        try:
-            self._saver.restore(self._sess, filename)
-            if epoch is not None: self._epoch = int(epoch)
-
-        except Exception, e:
-            print(e)
+        epoch = self._archive.restore(self._sess, self._checkpoint)
+        if epoch is not None: self._epoch = epoch
 
 
     def _save_checkpoint(self):
         if self._checkpoint is None: return
-        dirname = os.path.dirname(self._checkpoint)
-        if not os.path.isdir(dirname): os.makedirs(dirname)
-
-        try:
-            # save checkpoint
-            global_step = self._epoch if self._save_with_epoch else None
-            self._saver.save(self._sess, self._checkpoint, global_step=global_step)
-
-        except Exception,e:
-            print(e)
-
-
-    def _lastest_checkpoint(self):
-
-        def split_epoch(filename):
-            filename = os.path.basename(filename)
-            steps = re.findall(self._rex_steps, filename)
-            if len(steps) == 0: return None
-            epoch = steps[0]#int(steps[0])
-            return epoch
-
-        # check dir valid
-        dirname = os.path.dirname(self._checkpoint)
-        if not os.path.isdir(dirname): return None, None
-
-        # check latest checkpoint
-        latest_checkpoint = tf.train.latest_checkpoint(dirname)
-        if latest_checkpoint is not None: return latest_checkpoint, split_epoch(latest_checkpoint)
-
-
-        # check max epoch and valid checkpoint
-        filename = os.path.basename(self._checkpoint)
-
-        max_epoch = None
-        max_epoch_file = None
-        for fname in os.listdir(dirname):
-            epoch = split_epoch(fname)
-            if epoch is None: continue
-            if max_epoch is None or int(epoch) > int(max_epoch):
-                max_epoch = epoch
-                max_epoch_file = os.path.splitext(os.path.join(dirname, fname))[0]
-
-        return max_epoch_file, max_epoch
-
+        global_step = self._epoch if self._save_with_epoch else None
+        self._archive.save(self._sess, self._checkpoint, global_step = global_step)
 
 
 

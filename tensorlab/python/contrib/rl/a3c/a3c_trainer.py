@@ -7,6 +7,7 @@ class A3CTrainer(TrainerBase):
     def __init__(self,
                  master_thread,
                  train_threads,
+                 envs,
                  sess,
                  var_list=None,
                  *args, **kwargs):
@@ -14,6 +15,7 @@ class A3CTrainer(TrainerBase):
         # check
         assert master_thread is not None
         assert train_threads is not None and len(train_threads) > 0
+        assert envs is not None and len(envs) == len(train_threads)
 
         # call base __init__
         super(A3CTrainer, self).__init__(sess, *args, **kwargs)
@@ -21,6 +23,7 @@ class A3CTrainer(TrainerBase):
         # parms
         self._master_thread = master_thread
         self._train_threads = train_threads
+        self._envs = envs
         self._coord = tf.train.Coordinator()
 
 
@@ -48,14 +51,16 @@ class A3CTrainer(TrainerBase):
             if train_callback: train_callback(t)
 
 
-        def _thread_wrapper(thread):
-            thread(self._sess, _on_once_step, _on_once_train)
+        def _thread_wrapper(thread, env):
+            thread.train(self._sess, env, _on_once_step, _on_once_train)
 
 
 
         worker_threads = []
-        for thread in self._train_threads:
-            job = lambda: _thread_wrapper(thread)
+        for i in xrange(len(self._train_threads)):
+            thread = self._train_threads[i]
+            env = self._envs[i]
+            job = lambda: _thread_wrapper(thread, env)
             t = threading.Thread(target=job)
             t.start()
             worker_threads.append(t)

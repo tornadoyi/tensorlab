@@ -12,7 +12,8 @@ from actor_critic import *
 
 class A3CThread(object):
     def __init__(self,
-                 env,
+                 state_shape,
+                 num_actions,
                  ac_kernel,
                  choose_action_func,
                  train_per_nsteps=1,
@@ -22,7 +23,6 @@ class A3CThread(object):
                  reward_clip = None,
                  ):
 
-        self._env = env
         self._ac_kernel = ac_kernel
         self._choose_action_func = choose_action_func
         self._running = False
@@ -34,15 +34,12 @@ class A3CThread(object):
 
 
         # build kernel
-        self._input_state = tf.placeholder(tf.float32, shape=[None] + list(self._env.state_shape))
-        self._input_action = tf.placeholder(tf.float32, shape=[None, self._env.num_actions])
+        self._input_state = tf.placeholder(tf.float32, shape=[None] + list(state_shape))
+        self._input_action = tf.placeholder(tf.float32, shape=[None, num_actions])
         self._input_reward = tf.placeholder(tf.float32, shape=[None, 1])
         self._ac_kernel.build(self._input_state, self._input_action, self._input_reward)
 
 
-
-    @property
-    def env(self): return self._env
 
     @property
     def running(self): return self._running
@@ -59,9 +56,8 @@ class A3CThread(object):
     def stop(self): self._running = False
 
 
-    def __call__(self, sess, step_callback=None, train_callback=None):
+    def train(self, sess, env, step_callback=None, train_callback=None):
         # parms
-        env = self._env
         kernel = self._ac_kernel
         input_state = self._input_state
         input_action = self._input_action
@@ -95,8 +91,8 @@ class A3CThread(object):
                 if t: s = env.reset()
 
                 # choose action
-                a = self._choose_action(sess, s)
-                s_, r, t = self._env.step(a)
+                a = self._choose_action(sess, env, s)
+                s_, r, t = env.step(a)
                 if self._reward_clip: r = np.clip(r, *self._reward_clip)
 
                 # collect
@@ -141,9 +137,17 @@ class A3CThread(object):
 
 
 
+    def predict(self, sess, s):
+        kernel = self._ac_kernel
+        input_state = self._input_state
+        actions, action_probs = sess.run([kernel.policy.predict_actions, kernel.policy.predict_action_probs],
+                                         feed_dict={input_state: s})
 
-    def _choose_action(self, sess, s):
-        env = self._env
+        return self._choose_action_func(self, actions, action_probs)
+
+
+
+    def _choose_action(self, sess, env, s):
         kernel = self._ac_kernel
         input_state = self._input_state
 
