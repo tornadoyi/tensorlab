@@ -1,0 +1,34 @@
+PROJECT(tensorlab)
+
+cmake_minimum_required(VERSION 2.6)  
+
+
+# add srouce files
+aux_source_directory(./ SRC)
+
+
+# set cxx flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC -O2")  
+if(APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup")
+endif()
+
+# set include path
+
+
+# find tensorflow include path
+execute_process(COMMAND python -c "import tensorflow as tf; print(tf.sysconfig.get_include())" OUTPUT_VARIABLE PYTHON_TENSORFLOW)
+message(STATUS "Tensorflow include path: " ${PYTHON_TENSORFLOW})
+
+include_directories(./)
+include_directories(../include) # use tensorlab/tools/collect_includes.py to get tensorflow headers
+include_directories(${PYTHON_TENSORFLOW})
+
+
+# set link path
+link_directories(/usr/local/lib/)
+
+
+# build 
+add_library(tensorlab MODULE ${SRC})
+target_link_libraries(tensorlab tensorflow)

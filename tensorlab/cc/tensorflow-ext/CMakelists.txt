@@ -1,0 +1,35 @@
+PROJECT(tensorflow-ext)
+
+cmake_minimum_required(VERSION 2.6)  
+
+# find tensorflow include path
+execute_process(COMMAND python -c "import tensorflow as tf; print(tf.sysconfig.get_include())" OUTPUT_VARIABLE INCLUDE_TENSORFLOW)
+#message(STATUS "Tensorflow include path: " ${INCLUDE_TENSORFLOW})
+
+# add tensorflow includes
+set(INCLUDE_TENSORFLOW "${INCLUDE_TENSORFLOW}")
+include_directories(./)
+include_directories(${INCLUDE_TENSORFLOW})
+include_directories(../include)
+
+
+# add srouce files
+aux_source_directory(kernels SRC_KERNELS)
+aux_source_directory(register SRC_REGISTER)
+aux_source_directory(ops SRC_OPS)
+
+set(SRC_PY ${SRC_KERNELS} ${SRC_REGISTER})
+set(SRC_CC ${SRC_KERNELS} ${SRC_OPS} ${SRC_REGISTER})
+
+#message(STATUS ${SRC})
+
+# set cxx flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fPIC -O2")  
+if(APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup")
+endif()
+
+
+# build 
+add_library(tensorflow-ext MODULE ${SRC_PY})
+add_library(tensorflow-ext_cc MODULE ${SRC_CC})
