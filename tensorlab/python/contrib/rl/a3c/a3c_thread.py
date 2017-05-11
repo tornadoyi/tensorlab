@@ -137,13 +137,13 @@ class A3CThread(object):
 
 
 
-    def predict(self, sess, s):
+    def predict(self, sess, env, s):
         kernel = self._ac_kernel
         input_state = self._input_state
         actions, action_probs = sess.run([kernel.policy.predict_actions, kernel.policy.predict_action_probs],
                                          feed_dict={input_state: s})
 
-        return self._choose_action_func(self, actions, action_probs)
+        return self._choose_action_func(env, s, actions, action_probs)
 
 
 
@@ -162,7 +162,7 @@ class A3CThread(object):
             actions = np.squeeze(actions)
             action_probs = np.squeeze(action_probs)
 
-            return self._choose_action_func(self, actions, action_probs)
+            return self._choose_action_func(env, s, actions, action_probs)
 
 
 

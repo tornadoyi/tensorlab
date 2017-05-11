@@ -17,7 +17,9 @@ class TrainerBase(object):
                  max_save_second = None,
                  max_save_epoch = None,
                  max_epoch = None,
-                 save_with_epoch = False):
+                 save_with_epoch = False,
+                 lock_for_save = False,
+                 ):
 
         self._sess = sess
         self._init_variables = init_variables
@@ -26,6 +28,7 @@ class TrainerBase(object):
         self._max_save_epoch = max_save_epoch
         self._max_epoch = max_epoch
         self._save_with_epoch = save_with_epoch
+        self._lock_for_save = lock_for_save
         self._archive = archive if archive is not None else Archive()
         self._lock = thread.allocate_lock()
 
@@ -77,21 +80,24 @@ class TrainerBase(object):
 
     def _next_epoch(self):
         # lock
-        self._lock.acquire()
+        if self._lock_for_save: self._lock.acquire()
+
+        # epoch + 1
+        cur_epoch = self._epoch
+        self._epoch += 1
+
+        # unlock
+        if self._lock_for_save: self._lock.release()
 
         # save checkpoint
         curtime = time.time()
         if self._checkpoint is not None and \
                 (self._max_save_second is not None and curtime - self._last_save_time >= self._max_save_second) or \
-                (self._max_save_epoch is not None and self._epoch - self._last_save_epoch >= self._max_save_epoch):
+                (self._max_save_epoch is not None and cur_epoch - self._last_save_epoch >= self._max_save_epoch):
             self._last_save_time = curtime
-            self._last_save_epoch = self._epoch
+            self._last_save_epoch = cur_epoch
             self._save_checkpoint()
 
-        self._epoch += 1
-
-        # unlock
-        self._lock.release()
 
 
     def _check_end(self):
