@@ -86,9 +86,12 @@ class A3CThread(object):
             rewards = []
             terminals = []
 
+            # check ternimal
+            if t:
+                s = env.reset()
+                t = False
+
             while not t and steps - step_start < self._train_per_nsteps:
-                # check ternimal
-                if t: s = env.reset()
 
                 # choose action
                 a = self._choose_action(sess, env, s)

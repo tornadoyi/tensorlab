@@ -210,9 +210,11 @@ class ActorCriticRNN(ActorCritic):
 
         # tuple state
         if isinstance(self._initial_rnn_state, tuple):
-            self._rnn_state = type(self._initial_rnn_state)(*[tf.Variable(s, dtype=tf.float32, trainable=False) for s in self._initial_rnn_state])
+            self._rnn_state = type(self._initial_rnn_state)(*[tf.Variable(s, dtype=tf.float32, trainable=False, name="state_" + s.op.name)
+                                                              for s in self._initial_rnn_state])
         else:
-            self._rnn_state = tf.Variable(self._initial_rnn_state, dtype=tf.float32, trainable=False)
+            self._rnn_state = tf.Variable(self._initial_rnn_state, dtype=tf.float32, trainable=False,
+                                          name="state_" + self._initial_rnn_state.op.name)
 
         # (time_major = False, so output shape is [batch_size, max_time, cell.output_size])
         input = tf.expand_dims(input_states, 0)
