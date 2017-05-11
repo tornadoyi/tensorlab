@@ -4,8 +4,8 @@ build/
 dist/
 *.egg-info/
 *.log
-cmake*
+.project
 log
-cc/include
+tensorlab/cc/include
 *checkpoint*
 ignore
