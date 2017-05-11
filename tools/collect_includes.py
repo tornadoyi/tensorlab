@@ -10,7 +10,7 @@ def str2bool(v):
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tensorflow', type=str, help="tensorflow path")
+    parser.add_argument('--tensorflow', required=True, type=str, help="tensorflow path")
     args = parser.parse_args()
     return args
 
@@ -36,7 +36,7 @@ def copy_directory(src, dst):
 
 
 def collect_includes(tensorflow_path):
-    dst_include_path = os.path.realpath(os.path.join(ROOT_PATH, "../cc/include"))
+    dst_include_path = os.path.realpath(os.path.join(ROOT_PATH, "../tensorlab/cc/include"))
     if os.path.isdir(dst_include_path): shutil.rmtree(dst_include_path)
     os.mkdir(dst_include_path)
 

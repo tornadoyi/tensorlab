@@ -18,6 +18,12 @@ def parse():
 def build_cc():
     cur_path = os.getcwd()
 
+    # check include
+    include_path = os.path.join(ROOT_PATH, "tensorlab/cc/include")
+    if not os.path.isdir(os.path.join(include_path, "tensorflow")):
+        raise Exception("tensorlab need include tensorflow, please execute tensorlab/tools/collect_includes.py")
+
+
     # enter build cc path
     if not os.path.isdir(BUILD_CC_PATH): os.mkdir(BUILD_CC_PATH)
     os.chdir(BUILD_CC_PATH)
