@@ -101,7 +101,7 @@ class ActorCritic(object):
 
             # policy loss (output)  (Adding minus, because the original paper's objective
             # function is for gradient ascent, but we use gradient descent optimizer.)
-            self._policy_loss = -tf.reduce_sum(tf.reduce_sum(log_pi * self._actions, axis=1) *
+            self._policy_loss = -tf.reduce_sum(tf.reduce_sum(log_pi * self._actions, axis=1, keep_dims=True) *
                                                self._TD + entropy * self._entropy_beta)
 
             # value loss (output)

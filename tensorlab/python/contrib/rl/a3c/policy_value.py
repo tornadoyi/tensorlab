@@ -105,15 +105,16 @@ class MultiPolicy(Policy):
             action = input_actions if self._action_split_funcs is None else self._action_split_funcs[i](input_actions)
             p.build(input_states, action, *args, **kwargs)
 
-            self._pi = p.pi if i == 0 else tf.concat([self._pi, p.pi], axis=array_ops.dim(p.pi, -1)-1)
-            self._log_pi = p.log_pi if i == 0 else tf.concat([self._log_pi, p.log_pi], axis=array_ops.dim(p.log_pi, -1)-1)
-            self._entropy = p.entropy if i == 0 else tf.concat([self._entropy, p.entropy], axis=array_ops.dim(p.entropy, -1)-1)
+            self._pi = p.pi if i == 0 else tf.concat([self._pi, p.pi], axis=tf.rank(p.pi)-1)
+            self._log_pi = p.log_pi if i == 0 else tf.concat([self._log_pi, p.log_pi], axis=tf.rank(p.log_pi)-1)
+            self._entropy = p.entropy if i == 0 else tf.concat([self._entropy, p.entropy], axis=tf.rank(p.entropy)-1)
 
             self._predict_actions = p.predict_actions if i == 0 else \
-                tf.concat([self._predict_actions, p.predict_actions], axis=array_ops.dim(p.predict_actions, -1)-1)
+                tf.concat([self._predict_actions, p.predict_actions], axis=tf.rank(p.predict_actions) - 1)
 
             self._predict_action_probs = p.predict_action_probs if i == 0 else \
-                tf.concat([self._predict_action_probs, p.predict_action_probs], axis=array_ops.dim(p.predict_action_probs, -1)-1)
+                tf.concat([self._predict_action_probs, p.predict_action_probs],
+                          axis=tf.rank(p.predict_action_probs) - 1)
 
 
 
