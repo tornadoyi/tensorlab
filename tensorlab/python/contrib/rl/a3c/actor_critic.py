@@ -21,6 +21,7 @@ class ActorCritic(object):
                  entropy_beta=0.01,
                  critic_shrink_learning_rate = 1.0,
                  global_ac = None,
+                 observer = None
                  ):
 
         # check
@@ -34,6 +35,7 @@ class ActorCritic(object):
         self._critic_shrink_learning_rate = critic_shrink_learning_rate
         self._optimizer = optimizer
         self._global_ac = global_ac
+        self._observer = observer
 
         # ops
         self._reset_with_ops = []
@@ -65,6 +67,10 @@ class ActorCritic(object):
 
     @property
     def op_train(self): return self._op_train
+
+
+    @property
+    def observer(self): return self._observer
 
 
     def build(self, states, actions, R):
@@ -128,6 +134,9 @@ class ActorCritic(object):
             self._train_with_ops.append(self._op_acc_grads)
             self._op_reset = tf.group(*self._reset_with_ops)
             self._op_train = tf.group(*self._train_with_ops)
+
+            # build observer
+            if self._observer is not None: self._observer.build(self)
 
 
 

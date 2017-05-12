@@ -114,6 +114,7 @@ class A3CThread(object):
                 # end condition
                 if not self._running: break
 
+
             # calculate R
             R = 0 if t and self._no_reward_at_terminal else self._calculate_R(sess, s_)
             Rs = np.zeros(len(states))
@@ -129,8 +130,16 @@ class A3CThread(object):
                 input_action: buf_a,
                 input_reward: buf_R,
             }
-            sess.run(kernel.op_train, feed_dict=feed_dict)
 
+            # collect train ops
+            train_ops = [kernel.op_train]
+            if kernel.observer is not None: train_ops += kernel.observer.tensors
+
+            # train
+            resulut = sess.run(train_ops, feed_dict=feed_dict)
+
+            # update observer
+            if kernel.observer is not None: kernel.observer.update(resulut[1:])
 
             # Perform asynchronous update of theta using d_theta and of theta_v using d_theta_v
             sess.run(kernel.op_push)
