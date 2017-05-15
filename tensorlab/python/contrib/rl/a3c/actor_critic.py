@@ -96,26 +96,40 @@ class ActorCritic(object):
 
         # build network
         with var_scope.empty_variable_scope(type(self).__name__):
+            def make_tuple(v): return tuple(v) if isinstance(v, list) or isinstance(v, tuple) else tuple([v])
+
             # build policy and value
             self._build_policy_value(self._states, self._actions)
 
-            PI, log_pi, entropy  = self._policy.pi, self._policy.log_pi, self._policy.entropy
-            V = self._value.v
+            self._pi, self._log_pi, self._entropy = self._policy.pi, self._policy.log_pi, self._policy.entropy
+            self._v = self._value.v
 
             # temporary difference (R-V) (input for policy)
-            self._TD = self._R - V
+            self._td = self._R - self._v
 
-            # policy loss (output)  (Adding minus, because the original paper's objective
-            # function is for gradient ascent, but we use gradient descent optimizer.)
-            self._policy_loss = -tf.reduce_sum(tf.reduce_sum(log_pi * self._actions, axis=1, keep_dims=True) *
-                                               self._TD + entropy * self._entropy_beta)
+
+            # policy loss
+            log_pi_s, entropies, actions = make_tuple(self._log_pi), make_tuple(self._entropy),  make_tuple(self._policy.actions)
+            self._policy_loss = 0
+            for i in xrange(len(log_pi_s)):
+                log_pi, entropy, action = log_pi_s[i], entropies[i], actions[i]
+
+                # policy loss (output)  (Adding minus, because the original paper's objective
+                # function is for gradient ascent, but we use gradient descent optimizer.)
+                loss = -tf.reduce_sum(tf.reduce_sum(log_pi * action, axis=range(1, log_pi.shape.ndims), keep_dims=True) *
+                                               self._td + entropy * self._entropy_beta)
+
+                self._policy_loss += loss
+
 
             # value loss (output)
             # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-            self._value_loss = tf.nn.l2_loss(self._TD) * self._critic_shrink_learning_rate
+            self._value_loss = tf.nn.l2_loss(self._td) * self._critic_shrink_learning_rate
+
 
             # total loss
-            self._total_loss = self._policy_loss + self._value_loss
+            self._total_loss = self._policy_loss  + self._value_loss
+
 
             # collect variables
             self._train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=tf.get_variable_scope().name)

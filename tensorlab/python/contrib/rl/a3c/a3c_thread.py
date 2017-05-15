@@ -171,6 +171,9 @@ class A3CThread(object):
             actions, action_probs = sess.run([kernel.policy.predict_actions, kernel.policy.predict_action_probs],
                                       feed_dict = {input_state: s})
 
+            if isinstance(actions, list) or isinstance(actions, tuple):
+                actions, action_probs = np.hstack(actions), np.hstack(action_probs)
+
             actions = np.squeeze(actions)
             action_probs = np.squeeze(action_probs)
 
