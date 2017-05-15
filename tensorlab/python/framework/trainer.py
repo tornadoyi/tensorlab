@@ -64,7 +64,8 @@ class TrainerBase(object):
         self._train_loop(*args, **kwargs)
 
 
-
+    @property
+    def session(self): return self._sess
 
     @property
     def epoch(self): return self._epoch

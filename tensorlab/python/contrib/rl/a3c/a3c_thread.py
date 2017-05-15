@@ -34,9 +34,9 @@ class A3CThread(object):
 
 
         # build kernel
-        self._input_state = tf.placeholder(tf.float32, shape=[None] + list(state_shape))
-        self._input_action = tf.placeholder(tf.float32, shape=[None, num_actions])
-        self._input_reward = tf.placeholder(tf.float32, shape=[None, 1])
+        self._input_state = tf.placeholder(tf.float32, shape=[None] + list(state_shape), name="states")
+        self._input_action = tf.placeholder(tf.float32, shape=[None, num_actions], name="actions")
+        self._input_reward = tf.placeholder(tf.float32, shape=[None, 1], name="rewards")
         self._ac_kernel.build(self._input_state, self._input_action, self._input_reward)
 
 
