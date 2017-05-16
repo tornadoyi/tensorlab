@@ -6,6 +6,7 @@ import numpy as np
 import tensorlab as tl
 from tensorlab.python.contrib.rl.a3c import BasicPolicy, MultiPolicy, BasicValue, ActorCritic, ActorCriticRNN, A3CThread, A3CTrainer
 from tensorlab.python.contrib.rl.env import GymEnvironment
+import matplotlib.pyplot as plt
 
 
 ENTROPY_BETA = 0.01
@@ -20,9 +21,9 @@ REWARD_GAMMA = 0.9
 
 NO_REWARD_AT_TERMINAL = True
 
-NUM_WORK_THREADS = 1#multiprocessing.cpu_count() * 2
+NUM_WORK_THREADS = multiprocessing.cpu_count() * 2
 
-LEARNING_RATE = 1e-6
+LEARNING_RATE = 0.001#1e-6
 
 RMS_DECAY = 0.99
 
@@ -33,6 +34,7 @@ CHECK_POINT_PATH = "checkpoints/{0}/a3c-{1}/archive.ckpt"  # {0} is net type
 SAVE_PER_SECOND = 20
 
 GRAPH_SAVE_PATH = 'logs'
+
 
 
 class A3C(object):
@@ -57,7 +59,7 @@ class A3C(object):
         self._trainer = None
 
 
-    def train(self, log_per_second=None, save_graph_per_second=None):
+    def train(self, log_per_second=None, save_graph_per_second=None, save_statistic_per_second=None):
         # create trainer
         if self._trainer is None: self._trainer = self._build_a3c_trainer()
 
@@ -65,9 +67,13 @@ class A3C(object):
         # times
         self._log_per_second = log_per_second
         self._save_graph_per_second = save_graph_per_second
+        self._save_statistic_per_second = save_statistic_per_second
+
         self._pre_log_time = time.time()
         self._pre_save_graph_time = time.time()
+        self._pre_save_statistic_time = time.time()
         self._graph_writer = tf.summary.FileWriter(GRAPH_SAVE_PATH, self._graph)
+        self._rewards = [] # (epoch, reward)
 
         # start train
         self._trainer(epoch_callback = lambda *args, **kwargs: self._epoch_callback(*args, **kwargs),
@@ -101,6 +107,19 @@ class A3C(object):
             self._pre_save_graph_time = curtime
             if not os.path.isdir(GRAPH_SAVE_PATH): os.makedirs(GRAPH_SAVE_PATH)
             self._graph_writer.flush()
+
+        # save rewards
+        if env.terminal: self._rewards.append((self._trainer.epoch ,env.total_reward))
+
+        # save statistic
+        if self._save_statistic_per_second is not None and curtime - self._pre_save_statistic_time >= self._save_statistic_per_second:
+            self._pre_save_statistic_time = curtime
+            if not os.path.isdir(GRAPH_SAVE_PATH): os.makedirs(GRAPH_SAVE_PATH)
+            plt.plot([r[0] for r in self._rewards], [r[1] for r in self._rewards])
+            plt.xlabel('epoch')
+            plt.ylabel('total reward')
+            plt.savefig(os.path.join(GRAPH_SAVE_PATH, 'rewards_{0}.png'.format(self._trainer.epoch)))
+            #plt.show()
 
 
 

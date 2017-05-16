@@ -56,7 +56,9 @@ class A3CTrainer(TrainerBase):
             if train_callback: train_callback(i)
 
 
-        def _thread_wrapper(i, thread, env):
+        def _thread_wrapper(i):
+            thread = self._train_threads[i]
+            env = self._envs[i]
             thread.train(self._sess, env,
                          lambda *args: _on_once_step(i, thread, env),
                          lambda *args: _on_once_train(i, thread, env)
@@ -66,10 +68,8 @@ class A3CTrainer(TrainerBase):
 
         worker_threads = []
         for i in xrange(len(self._train_threads)):
-            thread = self._train_threads[i]
-            env = self._envs[i]
-            job = lambda: _thread_wrapper(i, thread, env)
-            t = threading.Thread(target=job)
+            job = lambda index: _thread_wrapper(index)
+            t = threading.Thread(target=job, args=(i, ))
             t.start()
             worker_threads.append(t)
 

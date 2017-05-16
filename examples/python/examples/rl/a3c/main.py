@@ -6,4 +6,4 @@ def main(args):
     game = args.game
     a3c = A3C(game)
 
-    a3c.train(log_per_second=1)
+    a3c.train(log_per_second=1, save_statistic_per_second=10)
