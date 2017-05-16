@@ -116,7 +116,7 @@ class ActorCritic(object):
 
                 # policy loss (output)  (Adding minus, because the original paper's objective
                 # function is for gradient ascent, but we use gradient descent optimizer.)
-                loss = -tf.reduce_sum(tf.reduce_sum(log_pi * action, axis=range(1, log_pi.shape.ndims), keep_dims=True) *
+                loss = -tf.reduce_mean(tf.reduce_sum(log_pi * action, axis=range(1, log_pi.shape.ndims), keep_dims=True) *
                                                self._td + entropy * self._entropy_beta)
 
                 self._policy_loss += loss
@@ -124,7 +124,7 @@ class ActorCritic(object):
 
             # value loss (output)
             # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-            self._value_loss = tf.nn.l2_loss(self._td) * self._critic_shrink_learning_rate
+            self._value_loss = tf.nn.l2_loss(self._td) / tf.to_float(tf.shape(self._td)[0]) * self._critic_shrink_learning_rate
 
 
             # total loss

@@ -80,6 +80,7 @@ class A3C(object):
 
     def _train_callback(self, index):
         if index != 0: return
+        #print("")
 
         # get parms
         sess = self._trainer.session

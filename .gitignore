@@ -6,6 +6,7 @@ dist/
 *.log
 .project
 log
+logs
 tensorlab/cc/include
 *checkpoint*
 ignore
