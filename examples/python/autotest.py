@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import tensorlab as tl
-from tensorlab.runtime.geometry import rectangle_yx as rrt
-from support import dataset
-from support.util import *
+from tensorlab.python.runtime.geometry import rectangle_yx as rrt
+from examples.support import dataset
+from examples.support.utils import *
 
 images, labels = dataset.load_object_detection_xml("../data/testing.xml")
 
