@@ -156,7 +156,8 @@ class A3C(object):
                 checkpoint=CHECK_POINT_PATH.format(self._game, self._net_type),
                 max_save_second=SAVE_PER_SECOND,
                 save_with_epoch = True,
-                archive=self._archive
+                archive=self._archive,
+                verbose = True
             )
         return trainer
 
@@ -193,30 +194,32 @@ class A3C(object):
                         "global_ac" : global_ac,
                         "observer": tl.framework.Observer("total_loss", "policy_loss", "value_loss")}
 
+
+        state_size = self._state_shape[0]
         action_size = self._num_actions
+
 
         if self._net_type == "rnn" or self._net_type == "lstm":
 
-            def build_policy_skills(input_state, *args):
-                layer = tf.layers.dense(input_state, 256, tf.nn.relu, kernel_initializer=w_init)
-                return tf.layers.dense(layer, self._action_skill_size, tf.nn.softmax, kernel_initializer=w_init)
+            class Policy(BasicPolicy):
+                def _build_network(self):
+                    layer = tf.layers.dense(self._states, 80, tf.nn.relu, kernel_initializer=w_init, name="policy_inputs")
+                    return tf.layers.dense(layer, action_size, tf.nn.softmax, kernel_initializer=w_init, name="policy_output")
 
-            def build_policy_targets(input_state, *args):
-                layer = tf.layers.dense(input_state, 256, tf.nn.relu, kernel_initializer=w_init)
-                return tf.layers.dense(layer, self._action_target_size, tf.nn.softmax, kernel_initializer=w_init)
 
-            def build_value(input_state, *args):
-                layer = tf.layers.dense(input_state, 128, tf.nn.relu, kernel_initializer=w_init)
-                return tf.layers.dense(layer, 1, None, kernel_initializer=w_init)
+            class Value(BasicValue):
+                def _build_network(self):
+                    layer = tf.layers.dense(self._states, 50, tf.nn.relu, kernel_initializer=w_init, name="value_inputs")
+                    return tf.layers.dense(layer, 1, None, kernel_initializer=w_init, name="value_outputs")
 
             if self._net_type == "rnn":
-                cell = tf.contrib.rnn.BasicRNNCell(self._state_shape[0])
+                cell = tf.contrib.rnn.BasicRNNCell(32)
             else:
-                cell = tf.contrib.rnn.BasicLSTMCell(self._state_shape[0])
+                cell = tf.contrib.rnn.BasicLSTMCell(32)
 
             return ActorCriticRNN(cell,
-                                  policy=MultiPolicy([BasicPolicy(build_policy_skills), BasicPolicy(build_policy_targets)]),
-                                  value=BasicValue(build_value),
+                                  policy=Policy(),
+                                  value=Value(),
                                   **common_parms)
 
 
@@ -225,8 +228,8 @@ class A3C(object):
 
             class Policy(BasicPolicy):
                 def _build_network(self):
-                    layer = tf.layers.dense(self._states, 200, tf.nn.relu, kernel_initializer=w_init, name="state_inputs")
-                    return tf.layers.dense(layer, action_size, tf.nn.softmax, kernel_initializer=w_init, name="state_output")
+                    layer = tf.layers.dense(self._states, 200, tf.nn.relu, kernel_initializer=w_init, name="policy_inputs")
+                    return tf.layers.dense(layer, action_size, tf.nn.softmax, kernel_initializer=w_init, name="policy_output")
 
 
             class Value(BasicValue):

@@ -2,11 +2,12 @@ import time
 import os
 import pickle
 import re
+import thread
 from types import FunctionType, MethodType
 import tensorflow as tf
 import numpy as np
-import thread
 from archive import Archive
+from tensorlab.python.common import logger
 
 class TrainerBase(object):
     def __init__(self,
@@ -19,6 +20,7 @@ class TrainerBase(object):
                  max_epoch = None,
                  save_with_epoch = False,
                  lock_for_save = False,
+                 verbose = False,
                  ):
 
         self._sess = sess
@@ -29,6 +31,7 @@ class TrainerBase(object):
         self._max_epoch = max_epoch
         self._save_with_epoch = save_with_epoch
         self._lock_for_save = lock_for_save
+        self._verbose = verbose
         self._archive = archive if archive is not None else Archive()
         self._lock = thread.allocate_lock()
 
@@ -112,12 +115,14 @@ class TrainerBase(object):
         if self._checkpoint is None: return
         epoch = self._archive.restore(self._sess, self._checkpoint)
         if epoch is not None: self._epoch = epoch
+        if self._verbose: logger.info("load checkpoint {0} with epoch {1}".format(self._checkpoint, epoch))
 
 
     def _save_checkpoint(self):
         if self._checkpoint is None: return
         global_step = self._epoch if self._save_with_epoch else None
         self._archive.save(self._sess, self._checkpoint, global_step = global_step)
+        if self._verbose: logger.info("save checkpoint to {0} with epoch {1}".format(self._checkpoint, global_step))
 
 
 
