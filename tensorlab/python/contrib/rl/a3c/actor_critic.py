@@ -5,7 +5,7 @@ import tensorflow as tf
 from tensorlab.python.common import *
 from policy_value import Policy, Value
 from actor_critic_layer import ACLayer
-from tensorlab.python.layers import Layer
+from tensorlab.python.layers import IndependentLayer
 from tensorlab.python.ops.base import variable_scope as var_scope
 
 
@@ -13,7 +13,7 @@ from tensorlab.python.ops.base import variable_scope as var_scope
 # Referecce https://arxiv.org/pdf/1602.01783.pdf
 
 
-class ActorCritic(Layer):
+class ActorCritic(IndependentLayer):
     def __init__(self,
                  state_shape, num_actions,
                  policy, value,
@@ -22,6 +22,7 @@ class ActorCritic(Layer):
                  critic_shrink_learning_rate=1.0,
                  global_ac=None,
                  optimizer=None,
+                 observer=None,
                  *args, **kwargs
                  ):
         # check
@@ -38,15 +39,19 @@ class ActorCritic(Layer):
         self._critic_shrink_learning_rate = critic_shrink_learning_rate
         self._optimizer = optimizer
         self._global_ac = global_ac
+        self._observer = observer
 
         # state
         self._rnn_init_states = self._rnn_next_states = None
 
         # call base
-        super(ActorCritic, self).__init__(once_build=True, *args, **kwargs)
+        super(ActorCritic, self).__init__(*args, **kwargs)
 
         # build
         self.build()
+
+    @property
+    def observer(self): return self._observer
 
     @property
     def input_state(self): return self._input_state
@@ -134,7 +139,7 @@ class ActorCritic(Layer):
         self._total_loss = self._policy_loss + self._value_loss
 
         # collect variables
-        self._train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=tf.get_default_graph()._name_stack)
+        self._train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=tf.get_variable_scope().name)
 
         # calculate gradients
         self._grads = tf.gradients(self._total_loss, self._train_vars)
@@ -144,6 +149,9 @@ class ActorCritic(Layer):
 
         # collect rnn states
         self._collect_rnn_states()
+
+        # build observer
+        if self._observer: self.observer.build(self)
 
 
 

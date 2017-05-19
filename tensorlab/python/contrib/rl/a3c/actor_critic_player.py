@@ -36,10 +36,10 @@ class ActorCriticPlayer(object):
 
         # predict
         R, next_rnn_state = sess.run([ac.v, ac.rnn_next_states],
-                     feed_dict=dict( [ac.input_state, batch_s] + zip(ac.rnn_init_states, rnn_state) ))
+                     feed_dict=dict( [(ac.input_state, batch_s)] + zip(ac.rnn_init_states, rnn_state) ))
 
         # save rnn state
-        self._save_rnn_state(next_rnn_state, step + len(s))
+        self._save_rnn_state(next_rnn_state, step + 1)
 
         return np.squeeze(R)
 
@@ -62,7 +62,7 @@ class ActorCriticPlayer(object):
             feed_dict=dict([(ac.input_state, batch_s)] + zip(ac.rnn_init_states, rnn_state) ))
 
         # save rnn state
-        self._save_rnn_state(next_rnn_state, step + len(s))
+        self._save_rnn_state(next_rnn_state, step + 1)
 
         return np.squeeze(actions), np.squeeze(action_probs)
 
@@ -81,13 +81,18 @@ class ActorCriticPlayer(object):
         rnn_state = self._find_rnn_state(step)
 
         # prepare fetches and feeds
-        fetches = [ac.gradients]
-        feeds = [(ac.input_state, s), (ac.input_aciton, a), (ac.input_reward, r)] + \
+        obs_tensors = ac.observer.tensors if ac.observer else []
+        fetches = [ac.gradients, obs_tensors]
+        feeds = [(ac.input_state, s), (ac.input_action, a), (ac.input_reward, r)] + \
                 zip(ac.rnn_init_states, rnn_state)
 
         # result
         results = sess.run(fetches, dict(feeds))
         grads = results[0]
+        obs_values = results[1]
+
+        # update observer
+        if ac.observer: ac.observer.update(obs_values)
 
         # accumulate grads
         if self._acc_grads is None:
@@ -111,9 +116,9 @@ class ActorCriticPlayer(object):
     def _find_rnn_state(self, step):
         index = step - self._game_start_step
         if index >= len(self._step_rnn_states):
-            raise Exception("receive an invalid step {0}, current rnn states {1}s, from {2} ~ {3}",
+            raise Exception("receive an invalid step {0}, current rnn states {1}s, from {2} ~ {3}".format(
                             step, len(self._step_rnn_states),
-                            self._game_start_step, self._game_start_step + len(self._step_rnn_states) - 1)
+                            self._game_start_step, self._game_start_step + len(self._step_rnn_states) - 1))
 
         return self._step_rnn_states[index]
 
@@ -125,10 +130,19 @@ class ActorCriticPlayer(object):
             self._step_rnn_states.append(state)
 
         elif index < len(self._step_rnn_states):
+            def compare(state, pre_state):
+                if isinstance(state, (list, tuple)):
+                    assert len(state) == len(pre_state)
+                    for i in xrange(len(state)):
+                        diff = compare(state[i], pre_state[i])
+                        if not diff: return False
+                else:
+                    return abs(state - pre_state) < 1e-6
+                return True
             pre_state = self._step_rnn_states[index]
-            assert np.sum(state - pre_state) < 1e-6
+            assert compare(state, pre_state)
 
         else:
-            raise Exception("receive an invalid step {0}, current rnn states {1}s, from {2} ~ {3}",
+            raise Exception("receive an invalid step {0}, current rnn states {1}s, from {2} ~ {3}".format(
                       step, len(self._step_rnn_states),
-                      self._game_start_step, self._game_start_step + len(self._step_rnn_states) - 1)
+                      self._game_start_step, self._game_start_step + len(self._step_rnn_states) - 1))

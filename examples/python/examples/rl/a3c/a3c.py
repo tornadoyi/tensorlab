@@ -4,7 +4,7 @@ import multiprocessing
 import tensorflow as tf
 import numpy as np
 import tensorlab as tl
-from tensorlab.python.contrib.rl.a3c import BasicPolicy, MultiPolicy, BasicValue, ActorCritic, ActorCriticRNN, A3CThread, A3CTrainer
+from tensorlab.python.contrib.rl.a3c import BasicPolicy, BasicValue, ActorCritic, A3CTrainer, A3CTrainSetting, ACInputRNN
 from tensorlab.python.contrib.rl.env import GymEnvironment
 import matplotlib.pyplot as plt
 
@@ -86,13 +86,12 @@ class A3C(object):
 
     def _train_callback(self, index):
         if index != 0: return
-        #print("")
 
         # get parms
         sess = self._trainer.session
-        thread = self._trainer.get_train_thread(index)
+        ac = self._trainer.get_ac(index)
         env = self._trainer.get_env(index)
-        observer = thread.ac_kernel.observer
+        observer = ac.observer
 
         # current time
         curtime = time.time()
@@ -123,25 +122,31 @@ class A3C(object):
 
 
 
-    def _choose_action(self, env, s, actions, action_probs):
 
+    def _choose_action(self, actions, action_probs, env, *args):
         index = np.random.choice(len(action_probs), p=action_probs)
         action = np.zeros_like(actions)
         action[index] = 1.0
-
         return action
 
 
 
 
     def _build_a3c_trainer(self):
+        train_setting = A3CTrainSetting(
+                            lambda *args, **kwargs: self._choose_action(*args, **kwargs),
+                            train_per_nsteps=TRAIN_PER_NSTEPS,
+                            exploration_rate = EXPLORATION_RATE,
+                            reward_gamma = REWARD_GAMMA,
+                            no_reward_at_terminal = NO_REWARD_AT_TERMINAL)
+
         # create slaves and envs of a3c threads
         with self._graph.as_default():
             master = self._master
             slaves = []
             envs = []
             for i in xrange(NUM_WORK_THREADS):
-                slave = self._build_a3c_thread(self._optimizer, master)
+                slave = self._build_actor_critic(self._optimizer, master)
                 slaves.append(slave)
 
                 env = GymEnvironment(self._game)
@@ -149,10 +154,10 @@ class A3C(object):
 
             # create trainer
             trainer = A3CTrainer(
-                master,
+                self._sess,
                 slaves,
                 envs,
-                self._sess,
+                train_setting,
                 checkpoint=CHECK_POINT_PATH.format(self._game, self._net_type),
                 max_save_second=SAVE_PER_SECOND,
                 save_with_epoch = True,
@@ -164,24 +169,13 @@ class A3C(object):
 
     def _build_master_archive(self):
         with self._graph.as_default():
-            thread = self._build_a3c_thread(self._optimizer)
+            ac = self._build_actor_critic(self._optimizer)
             vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) + tf.get_collection(tf.GraphKeys.SAVEABLE_OBJECTS)
             archive = tl.framework.Archive(var_list = vars)
-        return thread, archive
+        return ac, archive
 
 
-    def _build_a3c_thread(self, optimizer, global_thread=None):
-        global_ac = None if global_thread is None else global_thread.ac_kernel
-        return A3CThread(
-            self._state_shape,
-            self._num_actions,
-            self._build_actor_critic(optimizer, global_ac),
-            lambda *args, **kwargs: self._choose_action(*args, **kwargs),
-            train_per_nsteps=TRAIN_PER_NSTEPS,
-            exploration_rate = EXPLORATION_RATE,
-            reward_gamma = REWARD_GAMMA,
-            no_reward_at_terminal = NO_REWARD_AT_TERMINAL,
-        )
+
 
 
     def _build_actor_critic(self, optimizer, global_ac=None):
@@ -192,7 +186,8 @@ class A3C(object):
                         "entropy_beta" : ENTROPY_BETA,
                         "critic_shrink_learning_rate" : CRITIC_SHRINK_LEARNING_RATE,
                         "global_ac" : global_ac,
-                        "observer": tl.framework.Observer("total_loss", "policy_loss", "value_loss")}
+                        'observer' : tl.framework.Observer("total_loss", "policy_loss", "value_loss")
+                        }
 
 
         state_size = self._state_shape[0]
@@ -202,45 +197,47 @@ class A3C(object):
         if self._net_type == "rnn" or self._net_type == "lstm":
 
             class Policy(BasicPolicy):
-                def _build_network(self):
-                    layer = tf.layers.dense(self._states, 80, tf.nn.relu, kernel_initializer=w_init, name="policy_inputs")
+                def __build__(self, state, action):
+                    layer = tf.layers.dense(state, 80, tf.nn.relu, kernel_initializer=w_init, name="policy_input")
                     return tf.layers.dense(layer, action_size, tf.nn.softmax, kernel_initializer=w_init, name="policy_output")
 
 
             class Value(BasicValue):
-                def _build_network(self):
-                    layer = tf.layers.dense(self._states, 50, tf.nn.relu, kernel_initializer=w_init, name="value_inputs")
-                    return tf.layers.dense(layer, 1, None, kernel_initializer=w_init, name="value_outputs")
+                def __build__(self, state, action):
+                    layer = tf.layers.dense(state, 50, tf.nn.relu, kernel_initializer=w_init, name="value_input")
+                    return tf.layers.dense(layer, 1, None, kernel_initializer=w_init, name="value_output")
+
 
             if self._net_type == "rnn":
                 cell = tf.contrib.rnn.BasicRNNCell(32)
             else:
                 cell = tf.contrib.rnn.BasicLSTMCell(32)
 
-            return ActorCriticRNN(cell,
-                                  policy=Policy(),
-                                  value=Value(),
-                                  **common_parms)
-
+            return ActorCritic(self._state_shape, self._num_actions,
+                               policy=Policy(),
+                               value=Value(),
+                               input_layer=ACInputRNN(cell),
+                               **common_parms)
 
 
         elif self._net_type == "ff":
 
             class Policy(BasicPolicy):
-                def _build_network(self):
-                    layer = tf.layers.dense(self._states, 200, tf.nn.relu, kernel_initializer=w_init, name="policy_inputs")
+                def __build__(self, state, action):
+                    layer = tf.layers.dense(state, 200, tf.nn.relu, kernel_initializer=w_init, name="policy_input")
                     return tf.layers.dense(layer, action_size, tf.nn.softmax, kernel_initializer=w_init, name="policy_output")
 
 
             class Value(BasicValue):
-                def _build_network(self):
-                    layer = tf.layers.dense(self._states, 100, tf.nn.relu, kernel_initializer=w_init, name="value_inputs")
-                    return tf.layers.dense(layer, 1, None, kernel_initializer=w_init, name="value_outputs")
+                def __build__(self, state, action):
+                    layer = tf.layers.dense(state, 100, tf.nn.relu, kernel_initializer=w_init, name="value_input")
+                    return tf.layers.dense(layer, 1, None, kernel_initializer=w_init, name="value_output")
 
 
-            return ActorCritic(policy=Policy(),
-                               value=Value(),
-                               **common_parms)
+            return ActorCritic(self._state_shape, self._num_actions,
+                                policy=Policy(),
+                                value=Value(),
+                                **common_parms)
 
 
         else: raise Exception("invalid net type " + self._net_type)

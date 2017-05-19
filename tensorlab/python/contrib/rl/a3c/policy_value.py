@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorlab.python.common import *
 from tensorlab.python.ops.base import array as array_ops
-from ac_layer import ACLayer
+from actor_critic_layer import ACLayer
 
 class Policy(ACLayer):
     def __init__(self, *args, **kwargs):
@@ -43,7 +43,6 @@ class Policy(ACLayer):
     def __build_inputs__(self, input_state, input_action): return (input_state, input_action)
 
     def _build(self, input_state, input_action):
-        super(Policy, self)._build()
         self._state, self._action = self.__build_inputs__(input_state, input_action)
         self._network = self.__build__(self._state, self._action)
         self._build_parameters()

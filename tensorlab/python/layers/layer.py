@@ -1,12 +1,10 @@
 import tensorflow as tf
 
-class Layer(object):
-    def __init__(self, once_build=False, name=None):
+class _BaseLayer(object):
+    def __init__(self, name=None):
 
         # paramaters
-        self._once_build = once_build
         self._name = name
-        self._scope = name if name is not None else type(self).__name__
 
         # build
         self._built = False
@@ -22,14 +20,37 @@ class Layer(object):
 
 
     def build(self, *args, **kwargs):
-        if self._once_build and self._built: raise Exception("{0} only build once".format(type(self).__name__))
-        with tf.name_scope(self._scope):
+        if self._built: raise Exception("{0} only build once".format(type(self).__name__))
+
+        scope = self._variable_scope()
+        if scope is None:
             self._build(*args, **kwargs)
-            self._built = True
+        else:
+            with scope:
+                self._build(*args, **kwargs)
+        self._built = True
+
+
+    def _variable_scope(self): return None
 
     def _build(self, *args, **kwargs): self._outputs = self.__build__(*args, **kwargs)
 
 
+
+
+class IndependentLayer(_BaseLayer):
+
+    def _variable_scope(self):
+        scope_name = self._name if self._name is not None else type(self).__name__
+        return tf.variable_scope(None, default_name=scope_name, reuse=False)
+
+
+
+class SharedLayer(_BaseLayer):
+
+    def _variable_scope(self):
+        scope_name = self._name if self._name is not None else type(self).__name__
+        return tf.variable_scope(scope_name, reuse=self._built)
 
 
 

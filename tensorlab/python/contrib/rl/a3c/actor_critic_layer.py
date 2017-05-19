@@ -1,10 +1,10 @@
 import tensorflow as tf
-from tensorlab.python.layers import Layer
+from tensorlab.python.layers import IndependentLayer
 
 
-class ACLayer(Layer):
+class ACLayer(IndependentLayer):
     def __init__(self, *args, **kwargs):
-        super(ACLayer, self).__init__(once_build=True, *args, **kwargs)
+        super(ACLayer, self).__init__(*args, **kwargs)
 
         # rnn
         self._rnn_states = []

@@ -11,8 +11,8 @@ class A3CTrainer(TrainerBase):
     def __init__(self,
                  sess,
                  ac,
-                 setting,
                  envs,
+                 setting,
                  *args, **kwargs):
 
         # call base __init__
@@ -151,7 +151,7 @@ class A3CTrainThread(object):
             while not t and steps - step_start < setting.train_per_nsteps:
 
                 # choose action
-                if np.random.random() < self._sess.run(setting.exploration_rate):
+                if np.random.random() < setting.exploration_rate:
                     a = env.random_action(s)
                 else:
                     a = player.choose_action(s, steps, env)
@@ -239,6 +239,10 @@ class A3CTrainSetting(object):
 
     @property
     def reward_clip(self): return self._reward_clip
+
+
+    @exploration_rate.setter
+    def exploration_rate(self, v): self._exploration_rate = v
 
 
 
