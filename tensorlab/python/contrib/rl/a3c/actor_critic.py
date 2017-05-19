@@ -1,57 +1,61 @@
 import copy
 from types import FunctionType, MethodType, TypeType
+import numpy as np
 import tensorflow as tf
 from tensorlab.python.common import *
 from policy_value import Policy, Value
+from actor_critic_layer import ACLayer
+from tensorlab.python.layers import Layer
 from tensorlab.python.ops.base import variable_scope as var_scope
+
 
 # Asynchronous Advantage Actor Critic (A3C),
 # Referecce https://arxiv.org/pdf/1602.01783.pdf
 
 
-
-
-
-class ActorCritic(object):
-
+class ActorCritic(Layer):
     def __init__(self,
-                 policy,
-                 value,
-                 optimizer,
+                 state_shape, num_actions,
+                 policy, value,
+                 input_layer = None,
                  entropy_beta=0.01,
-                 critic_shrink_learning_rate = 1.0,
-                 global_ac = None,
-                 observer = None
+                 critic_shrink_learning_rate=1.0,
+                 global_ac=None,
+                 optimizer=None,
+                 *args, **kwargs
                  ):
-
         # check
-        assert isinstance(policy, Policy) or isinstance(policy, Value)
-
+        assert state_shape is not None and num_actions is not None
+        assert isinstance(policy, Policy) and isinstance(value, Value)
 
         # parameters
+        self._state_shape = state_shape
+        self._num_actions = num_actions
         self._policy = policy
         self._value = value
+        self._input_layer = input_layer
         self._entropy_beta = entropy_beta
         self._critic_shrink_learning_rate = critic_shrink_learning_rate
         self._optimizer = optimizer
         self._global_ac = global_ac
-        self._observer = observer
-
-        # ops
-        self._reset_with_ops = []
-        self._train_with_ops = []
-        self._op_reset = self._op_train = None
 
         # state
-        self._has_build = False
+        self._rnn_init_states = self._rnn_next_states = None
 
+        # call base
+        super(ActorCritic, self).__init__(once_build=True, *args, **kwargs)
 
+        # build
+        self.build()
 
     @property
-    def policy(self): return self._policy
+    def input_state(self): return self._input_state
 
     @property
-    def value(self): return self._value
+    def input_action(self): return self._input_action
+
+    @property
+    def input_reward(self): return self._input_R
 
     @property
     def train_vars(self): return self._train_vars
@@ -63,125 +67,83 @@ class ActorCritic(object):
     def op_pull(self): return self._op_pull
 
     @property
-    def op_reset(self): return self._op_reset
+    def gradients(self): return self._grads
 
     @property
-    def op_train(self): return self._op_train
-
+    def rnn_init_states(self): return self._rnn_init_states
 
     @property
-    def observer(self): return self._observer
+    def rnn_next_states(self): return self._rnn_next_states
+
+    @property
+    def total_loss(self): return self._total_loss
+
+    @property
+    def policy_loss(self): return self._policy_loss
+
+    @property
+    def value_loss(self): return self._value_loss
+
+    @property
+    def predict_actions(self): return self._predict_actions
+
+    @property
+    def predict_action_probs(self): return self._predict_action_probs
+
+    @property
+    def td(self): return self._td
+
+    @property
+    def v(self): return self._value.v
 
 
-    def build(self, states, actions, R):
-        """
-        :param state: used on choose action, should be Tensor of shape: [batch, ...]
-        :param action: used calculate policy loss, should be Tensor of shape: [batch, num_actions]
-        :param R: nsteps reward should be Tensor of shape: [batch, 1]
-        :return: 
-        """
+    def _build(self):
+        self._input_state = tf.placeholder(tf.float32, shape=[None] + list(self._state_shape), name="states")
+        self._input_action = tf.placeholder(tf.float32, shape=[None, self._num_actions], name="actions")
+        self._input_R = tf.placeholder(tf.float32, shape=[None, 1], name="rewards")
 
-        # check
-        assert self._has_build == False
-        assert states is not None and states.shape.ndims == 2
-        assert actions is not None and actions.shape.ndims == 2
-        assert R is not None and R.shape.ndims == 2
+        # build policy and value
+        self._build_policy_value(self._input_state, self._input_action)
+        policies = self._policy if isinstance(self._policy, (list, tuple)) else [self._policy]
 
-
-        self._has_build = True
-        self._states = states
-        self._actions = actions
-        self._R = R
+        # collect predict_actions and predict_action_probs
+        self._predict_actions = [p.predict_action for p in policies]
+        self._predict_action_probs = [p.predict_action_prob for p in policies]
 
 
-        # build network
-        with var_scope.empty_variable_scope(type(self).__name__):
-            def make_tuple(v): return tuple(v) if isinstance(v, list) or isinstance(v, tuple) else tuple([v])
+        # temporary difference (R-V) (input for policy)
+        self._td = self._input_R - self._value.v
 
-            # build policy and value
-            self._build_policy_value(self._states, self._actions)
+        # calculate policy loss
+        self._policy_loss = 0
+        for i in xrange(len(policies)):
+            policy = policies[i]
+            log_pi, entropy, action = policy.log_pi, policy.entropy, policy.action
 
-            self._pi, self._log_pi, self._entropy = self._policy.pi, self._policy.log_pi, self._policy.entropy
-            self._v = self._value.v
+            loss = -tf.reduce_mean(tf.reduce_sum(log_pi * action, axis=range(1, log_pi.shape.ndims), keep_dims=True) *
+                                   self._td + entropy * self._entropy_beta)
 
-            # temporary difference (R-V) (input for policy)
-            self._td = self._R - self._v
-
-
-            # policy loss
-            log_pi_s, entropies, actions = make_tuple(self._log_pi), make_tuple(self._entropy),  make_tuple(self._policy.actions)
-            self._policy_loss = 0
-            for i in xrange(len(log_pi_s)):
-                log_pi, entropy, action = log_pi_s[i], entropies[i], actions[i]
-
-                # policy loss (output)  (Adding minus, because the original paper's objective
-                # function is for gradient ascent, but we use gradient descent optimizer.)
-                loss = -tf.reduce_mean(tf.reduce_sum(log_pi * action, axis=range(1, log_pi.shape.ndims), keep_dims=True) *
-                                               self._td + entropy * self._entropy_beta)
-
-                self._policy_loss += loss
+            self._policy_loss += loss
 
 
-            # value loss (output)
-            # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-            self._value_loss = tf.nn.l2_loss(self._td) / tf.to_float(tf.shape(self._td)[0]) * self._critic_shrink_learning_rate
+        # value loss (output)
+        # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
+        self._value_loss = tf.nn.l2_loss(self._td) / tf.to_float(tf.shape(self._td)[0]) * self._critic_shrink_learning_rate
 
+        # total loss
+        self._total_loss = self._policy_loss + self._value_loss
 
-            # total loss
-            self._total_loss = self._policy_loss  + self._value_loss
+        # collect variables
+        self._train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=tf.get_default_graph()._name_stack)
 
+        # calculate gradients
+        self._grads = tf.gradients(self._total_loss, self._train_vars)
 
-            # collect variables
-            self._train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=tf.get_variable_scope().name)
+        # build pull, push op
+        self._op_pull, self._op_push = self._build_pull_push()
 
-            # calculate gradients
-            self._grads = tf.gradients(self._total_loss, self._train_vars)
-
-            # accumulate gradients
-            self._acc_grads, self._op_acc_grads, self._op_clean_grads = self._build_accumulate_gradients()
-
-            # build pull, push op
-            self._op_pull, self._op_push = self._build_pull_push()
-
-            # add ops to reset and update list
-            self._reset_with_ops.append(self._op_clean_grads)
-            self._train_with_ops.append(self._op_acc_grads)
-            self._op_reset = tf.group(*self._reset_with_ops)
-            self._op_train = tf.group(*self._train_with_ops)
-
-            # build observer
-            if self._observer is not None: self._observer.build(self)
-
-
-
-    def _build_accumulate_gradients(self):
-        acc_grads = []
-        op_acc_grads = []
-        op_clean_grads = []
-        for grad in self._grads:
-            zero = tf.zeros(grad.shape, grad.dtype)
-            acc_grad = tf.Variable(zero, trainable=False, name="acc_{0}".format(grad.op.name))
-            op_acc_grad = tf.assign_add(acc_grad, grad)
-            op_clean_grad = tf.assign(acc_grad, zero)
-            acc_grads.append(acc_grad)
-            op_acc_grads.append(op_acc_grad)
-            op_clean_grads.append(op_clean_grad)
-
-        return acc_grads, tf.group(*op_acc_grads), tf.group(*op_clean_grads)
-
-
-
-    def _build_pull_push(self):
-        if self._global_ac is None: return None, None
-
-        g_vars = self._global_ac.train_vars
-        vars = self._train_vars
-        acc_grads = self._acc_grads
-
-        op_pull = tf.group(*[tf.assign(vars[i], g_vars[i]) for i in xrange(len(g_vars))])
-        op_push = self._optimizer.apply_gradients(zip(acc_grads, g_vars))
-
-        return op_pull, op_push
+        # collect rnn states
+        self._collect_rnn_states()
 
 
 
@@ -192,76 +154,40 @@ class ActorCritic(object):
 
 
 
+    def _build_pull_push(self):
+        if self._global_ac is None: return None, None
+
+        g_vars = self._global_ac.train_vars
+        vars = self._train_vars
+
+        op_pull = tf.group(*[tf.assign(vars[i], g_vars[i]) for i in xrange(len(g_vars))])
+        op_push = None if self._optimizer is None else self._optimizer.apply_gradients(zip(self._grads, g_vars))
+
+        return op_pull, op_push
 
 
-class ActorCriticRNN(ActorCritic):
-    def __init__(self,
-                 rnn_cell,
-                 actor_update_rnn_grad=True,
-                 critic_update_rnn_grad=True,
-                 *args, **kwargs):
+
+    def _collect_rnn_states(self):
+
+        rnn_states = []
+        if self._input_layer: rnn_states += self._input_layer.rnn_states
+
+        policies = self._policy if isinstance(self._policy, (list, tuple)) else [self._policy]
+        for p in policies:
+            rnn_states += p.rnn_states
+
+        rnn_states += self._value.rnn_states
+
+        self._rnn_init_states = [init for (init, next) in rnn_states]
+        self._rnn_next_states = [next for (init, next) in rnn_states]
 
 
-        # parameters
-        self._rnn_cell = rnn_cell
-        self._actor_update_rnn_grad = actor_update_rnn_grad
-        self._critic_update_rnn_grad = critic_update_rnn_grad
-
-        # rnn properties
-        self._rnn_state = self._initial_rnn_state = self._op_update_rnn_state = self._op_reset_rnn_state = None
 
 
-        super(ActorCriticRNN, self).__init__(*args, **kwargs)
 
 
-    @property
-    def rnn_state(self): return self._rnn_state
-
-    @property
-    def initial_rnn_state(self): return self._initial_rnn_state
-
-    @property
-    def op_update_rnn_state(self): return self._op_update_rnn_state
-
-    @property
-    def op_reset_rnn_state(self): return self._op_reset_rnn_state
 
 
-    def _build_policy_value(self, input_states, *args, **kwargs):
-
-        self._initial_rnn_state = self._rnn_cell.zero_state(batch_size=1, dtype=tf.float32)
-
-        # tuple state
-        if isinstance(self._initial_rnn_state, tuple):
-            self._rnn_state = type(self._initial_rnn_state)(*[tf.Variable(s, dtype=tf.float32, trainable=False, name="state_" + s.op.name)
-                                                              for s in self._initial_rnn_state])
-        else:
-            self._rnn_state = tf.Variable(self._initial_rnn_state, dtype=tf.float32, trainable=False,
-                                          name="state_" + self._initial_rnn_state.op.name)
-
-        # (time_major = False, so output shape is [batch_size, max_time, cell.output_size])
-        input = tf.expand_dims(input_states, 0)
-        output, state = tf.nn.dynamic_rnn(self._rnn_cell,
-                                          input,
-                                          initial_state=self._rnn_state,
-                                          time_major=False,
-                                          scope=None)
-
-        # remove unused dim batch of lstm_outputs
-        output = tf.squeeze(output, [0])
-
-        # cur_state op
-        if isinstance(self._initial_rnn_state, tuple):
-            self._op_reset_state = tf.group(*[tf.assign(self._rnn_state[i], self._initial_rnn_state[i]) for i in xrange(len(self._initial_rnn_state))])
-            self._op_reset_state = tf.group(*[tf.assign(self._rnn_state[i], state[i]) for i in xrange(len(state))])
-        else:
-            self._op_reset_state = tf.assign(self._rnn_state, self._initial_rnn_state)
-            self._op_update_state = tf.assign(self._rnn_state, state)
 
 
-        # build policy and values
-        policy_states = output if self._actor_update_rnn_grad else tf.stop_gradient(output)
-        value_states = output if self._critic_update_rnn_grad else tf.stop_gradient(output)
 
-        self._policy.build(policy_states, *args, **kwargs)
-        self._value.build(value_states, *args, **kwargs)
