@@ -38,7 +38,7 @@ class ActorCritic(IndependentLayer):
         self._entropy_beta = entropy_beta
         self._critic_shrink_learning_rate = critic_shrink_learning_rate
         self._optimizer = optimizer
-        self._global_ac = global_ac
+        self._global_ac = self if global_ac == 'self' else global_ac
         self._observer = observer
 
         # state

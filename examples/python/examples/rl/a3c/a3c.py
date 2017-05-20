@@ -47,7 +47,7 @@ class A3C(object):
         # tools
         self._graph = tf.Graph()
         self._sess = tf.InteractiveSession(graph=self._graph)
-        self._optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=RMS_DECAY, epsilon=0.1)
+        self._optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=RMS_DECAY, epsilon=0.1, name="RMSProp")
 
         # shape and num actions
         env = GymEnvironment(self._game)
@@ -169,7 +169,7 @@ class A3C(object):
 
     def _build_master_archive(self):
         with self._graph.as_default():
-            ac = self._build_actor_critic(self._optimizer)
+            ac = self._build_actor_critic(self._optimizer, 'self')
             vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) + tf.get_collection(tf.GraphKeys.SAVEABLE_OBJECTS)
             archive = tl.framework.Archive(var_list = vars)
         return ac, archive
